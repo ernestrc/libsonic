@@ -1,0 +1,60 @@
+build
+doc/html
+doc/latex
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+target/
+lib/
+include/
+bin/
+tags
+
+*.profraw
+*.profdata
+
+Makefile
+src/Makefile
+deps/Makefile
+test/Makefile
+src/config.h
+
+autom4te.cache/
+config.log
+config.status
+.vimrc
+
+src/logdinit.lua.h
+src/luvibundle.lua.h
+src/luvipath.lua.h
+src/logdconfig.lua
+src/logdconfig.lua.h
+
+test/helper.sh

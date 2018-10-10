@@ -1,0 +1,25 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5a04e142..1737ff3e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -370,17 +370,10 @@ LIST(REMOVE_ITEM UNIT_TEST_SOURCE_FILES
+ 
+ SET(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_DL_LIBS})
+ 
+-IF (ZLIB_FOUND)
+-    LIST(INSERT EXTRA_LIBS 0 ${ZLIB_LIBRARIES})
+-ENDIF (ZLIB_FOUND)
++LIST(INSERT EXTRA_LIBS 0 ${ZLIB_LIBRARIES})
+ 
+-IF (WSLAY_FOUND)
+-    ADD_LIBRARY(libh2o lib/websocket.c ${LIB_SOURCE_FILES})
+-    ADD_LIBRARY(libh2o-evloop lib/websocket.c ${LIB_SOURCE_FILES})
+-ELSE ()
+-    ADD_LIBRARY(libh2o ${LIB_SOURCE_FILES})
+-    ADD_LIBRARY(libh2o-evloop ${LIB_SOURCE_FILES})
+-ENDIF (WSLAY_FOUND)
++ADD_LIBRARY(libh2o lib/websocket.c ${LIB_SOURCE_FILES})
++ADD_LIBRARY(libh2o-evloop lib/websocket.c ${LIB_SOURCE_FILES})
+ 
+ SET_TARGET_PROPERTIES(libh2o PROPERTIES
+     OUTPUT_NAME h2o

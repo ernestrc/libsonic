@@ -1,0 +1,56 @@
+sudo: required
+language: c
+
+services:
+  - docker
+
+matrix:
+  include:
+    # develop build
+    - os: linux
+      env:
+        - MATRIX_SCRIPT="docker build . -t sonic-build:develop -f utils/Dockerfile.develop && docker run --cap-add=SYS_PTRACE --env-file env.list --rm -ti -v /tmp/sonic:/opt/sonic/bin sonic-build:develop sh -c 'make && env && make test && make install'"
+
+    # check that we can build on Ubuntu
+    - os: linux
+      env:
+        - MATRIX_SCRIPT="docker build . -t sonic-build:ubuntu -f utils/Dockerfile.ubuntu && docker run --env-file env.list --rm -ti -v /tmp/sonic:/opt/sonic/bin sonic-build:ubuntu sh -c 'make && env && make test && make install'"
+
+    # check that we can build on Centos 7
+    - os: linux
+      env:
+        - MATRIX_SCRIPT="docker build . -t sonic-build:centos -f utils/Dockerfile.centos7 && docker run --env-file env.list --rm -ti -v /tmp/sonic:/opt/sonic/bin sonic-build:centos sh -c 'make && env && make test && make install'"
+
+    # check that we can build on Debian
+    - os: linux
+      env:
+        - MATRIX_SCRIPT="docker build . -t sonic-build:debian -f utils/Dockerfile.debian && docker run --env-file env.list --rm -ti -v /tmp/sonic:/opt/sonic/bin sonic-build:debian sh -c 'make && env && make test && make install'"
+
+    # check that we can build with musl-libc and link statically
+    - os: linux
+      env:
+        # loading SO is disabled with static musl libc
+        - MATRIX_EVAL="export SKIP_INT_TESTS=test_so_scanner.sh"
+        - MATRIX_SCRIPT="docker build . -t sonic-build:static -f utils/Dockerfile.static && docker run --env-file env.list --rm -ti -v /tmp/sonic:/opt/sonic/bin sonic-build:static sh -c 'make && env && make test && make install'"
+
+    # check that we can build on OSX 10.11
+    - os: osx
+      osx_image: xcode8
+      env:
+        - MATRIX_EVAL="export LIBTOOLIZE=glibtoolize && export LIBTOOL=glibtool"
+        - MATRIX_SCRIPT="env && brew update && brew bundle --file=utils/Brewfile && ./configure --enable-build-all && make"
+
+    # check that we can build on OSX 10.12
+    - os: osx
+      osx_image: xcode9
+      env:
+        - MATRIX_EVAL="export LIBTOOLIZE=glibtoolize && export LIBTOOL=glibtool"
+        - MATRIX_SCRIPT="env && brew update && brew bundle --file=utils/Brewfile && ./configure --enable-build-all && make"
+
+before_install:
+    - eval "${MATRIX_EVAL}"
+    - env | grep -v UTF | grep '=' > env.list && cat env.list
+    - echo "${MATRIX_SCRIPT}" > script.sh
+
+script:
+    - source script.sh

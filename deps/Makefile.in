@@ -1,0 +1,93 @@
+
+export CC=@CC@
+export CXX=@CXX@
+export CFLAGS=@CFLAGS@
+export LDFLAGS=@LDFLAGS@
+export PREFIX=$(shell pwd)
+
+ROOT_DIR=@ROOT_DIR@
+DEVELOP_BUILD=@DEVELOP_BUILD@
+BUILD_LIBUV=@BUILD_LIBUV@
+BUILD_H2O=@BUILD_H2O@
+BUILD_WSLAY=@BUILD_WSLAY@
+BUILD_LIBS=@BUILD_LIBS@
+
+LIBDIR = $(ROOT_DIR)/deps/lib
+BINDIR = $(ROOT_DIR)/deps/bin
+MANDIR = $(ROOT_DIR)/deps/man
+SHAREDIR = $(ROOT_DIR)/deps/share
+INCDIR = $(ROOT_DIR)/deps/include
+
+LIBSLAB = $(LIBDIR)/libslab.a
+LIBH2O = $(LIBDIR)/libh2o.a
+LIBH2OEV = $(LIBDIR)/libh2o-evloop.a
+LIBUV = $(LIBDIR)/libuv.a
+LIBWSLAY = $(LIBDIR)/libwslay.a
+LIBCRYPTO = $(LIBDIR)/libcrypto.a
+LIBSSL = $(LIBDIR)/libssl.a
+
+DIRS = $(MANDIR) $(SHAREDIR) $(BINDIR) $(INCDIR) $(LIBDIR)
+
+.DEFAULT: all
+.PHONY: clean
+
+all: $(BUILD_LIBS) $(LIBSLAB)
+
+OPTS=CXX='$(CXX)' CC='$(CC)' CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)' PREFIX='$(PREFIX)'
+
+CONFIGURE_OPTS=$(OPTS) --prefix='$(PREFIX)' --disable-shared
+$(LIBUV): | $(DIRS)
+	@ echo "  COMPILING	libuv"
+	@ cd libuv && ./autogen.sh && \
+		./configure $(CONFIGURE_OPTS) && $(MAKE) && $(MAKE) install
+
+$(LIBWSLAY): | $(DIRS)
+	@ echo "  COMPILING	libwslay"
+	@ cp wslay.patch wslay/wslay.patch
+	@- cd wslay && patch -N -p1 < wslay.patch
+	@ cd wslay && autoreconf -i && automake && \
+		autoconf && ./configure $(CONFIGURE_OPTS) LDFLAGS='$(CFLAGS) $(LDFLAGS)' && \
+		$(MAKE) install
+
+H2O_ENV=$(OPTS)
+H2O_OPTS=-DCMAKE_INSTALL_BINDIR=$(BINDIR) -DCMAKE_INSTALL_INCLUDEDIR=$(INCDIR) \
+		 -DCMAKE_INSTALL_LIBDIR=$(LIBDIR) -DCMAKE_INSTALL_DATAROOTDIR=$(SHAREDIR) \
+		 -DWITH_MRUBY=off -DWITH_BUNDLED_SSL=off
+
+$(LIBH2OEV): $(LIBH2O)
+$(LIBH2O): $(LIBWSLAY) $(LIBSSL) | $(DIRS)
+	@ echo "  COMPILING	libh2o"
+	@ cp h2o.patch h2o/h2o.patch
+	@- cd h2o && patch -N -p1 < h2o.patch
+	@ cd h2o && $(H2O_ENV) cmake $(H2O_OPTS) . && make && make install
+
+# to maximize compatiblity, as full libslab requires -std=c11/gnu11
+ifeq ($(DEVELOP_BUILD),yes)
+$(LIBSLAB): | $(DIRS)
+	@ echo "  COMPILING	libslab"
+	@ cd slab && $(MAKE) CC='$(CC)' CFLAGS='$(CFLAGS)'
+	@ mkdir -p $(INCDIR)/slab && cp -f slab/src/*.h $(INCDIR)/slab
+	@ cp slab/lib/libslab.a $(LIBSLAB)
+else
+$(LIBSLAB): | $(DIRS)
+	@ echo "  COMPILING	libslab"
+	$(CC) $(CFLAGS) -c slab/src/buf.c -o slab/src/buf.o && $(AR) rcs $(LIBSLAB) slab/src/buf.o
+	@ mkdir -p $(INCDIR)/slab && cp slab/src/buf.h $(INCDIR)/slab
+endif
+
+
+OPENSSL_CFG=--openssldir=$(PREFIX) --prefix=$(PREFIX) no-fuzz-libfuzzer no-fuzz-afl no-unit-test no-shared no-hw no-dso no-threads
+OPENSSL_OPTS=$(OPTS)
+$(LIBCRYPTO): $(LIBSSL)
+
+$(LIBSSL): $(OPENSSLDEPS)
+	@ echo "  COMPILING openssl"
+	@ cd openssl && \
+		./config $(OPENSSL_OPTS) $(OPENSSL_CFG) && $(MAKE) $(OPENSSL_OPTS) && $(MAKE) install $(OPENSSL_OPTS)
+
+$(LIBDIR) $(BINDIR) $(MANDIR) $(SHAREDIR) $(INCDIR):
+	@ mkdir -p $@
+
+clean:
+	@ rm -rf $(DIRS)
+	@ rm -rf *.cnf *.cnf.dist certs private misc

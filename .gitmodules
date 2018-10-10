@@ -1,0 +1,20 @@
+[submodule "deps/slab"]
+	path = deps/slab
+	url = git@github.com:ernestrc/slab.git
+	ignore = dirty
+[submodule "deps/libuv"]
+	path = deps/libuv
+	url = https://github.com/libuv/libuv
+	ignore = dirty
+[submodule "deps/h2o"]
+	path = deps/h2o
+	url = https://github.com/h2o/h2o.git
+	ignore = dirty
+[submodule "deps/wslay"]
+	path = deps/wslay
+	url = https://github.com/tatsuhiro-t/wslay.git
+	ignore = dirty
+[submodule "deps/openssl"]
+	path = deps/openssl
+	url = https://github.com/openssl/openssl.git
+	ignore = dirty

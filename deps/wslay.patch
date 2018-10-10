@@ -1,0 +1,46 @@
+diff --git a/doc/Makefile.am b/doc/Makefile.am
+index 0fc62da..2295ea0 100644
+--- a/doc/Makefile.am
++++ b/doc/Makefile.am
+@@ -21,29 +21,7 @@
+ # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ SPHINX_DIR = $(srcdir)/sphinx
+-MANPAGES_WITH_SRC = \
+-	man/wslay_event_context_server_init.3 \
+-	man/wslay_event_config_set_no_buffering.3 \
+-	man/wslay_event_config_set_max_recv_msg_length.3 \
+-	man/wslay_event_config_set_callbacks.3 \
+-	man/wslay_event_queue_close.3 \
+-	man/wslay_event_queue_fragmented_msg.3 \
+-	man/wslay_event_queue_msg.3 \
+-	man/wslay_event_recv.3 \
+-	man/wslay_event_send.3 \
+-	man/wslay_event_set_error.3 \
+-	man/wslay_event_want_read.3 \
+-	man/wslay_event_want_write.3 \
+-	man/wslay_event_get_read_enabled.3 \
+-	man/wslay_event_get_write_enabled.3 \
+-	man/wslay_event_shutdown_read.3 \
+-	man/wslay_event_shutdown_write.3 \
+-	man/wslay_event_get_close_received.3 \
+-	man/wslay_event_get_close_sent.3 \
+-	man/wslay_event_get_status_code_received.3 \
+-	man/wslay_event_get_status_code_sent.3 \
+-	man/wslay_event_get_queued_msg_count.3 \
+-	man/wslay_event_get_queued_msg_length.3
++MANPAGES_WITH_SRC =
+ SPHINX_MANPAGES_SRC = $(MANPAGES_WITH_SRC:%.3=$(SPHINX_DIR)/%.rst)
+ 
+ SPHINX_FILES = $(SPHINX_DIR)/Makefile \
+@@ -55,9 +33,7 @@ SPHINX_FILES = $(SPHINX_DIR)/Makefile \
+ 
+ MANPAGES_DST = $(MANPAGES_SRC:${SPHINX_DIR}/%.rst=%.3)
+ 
+-MANPAGES = $(MANPAGES_WITH_SRC) \
+-	man/wslay_event_context_client_init.3 \
+-	man/wslay_event_context_free.3
++MANPAGES =
+ 
+ man_MANS = $(MANPAGES)
+ 
