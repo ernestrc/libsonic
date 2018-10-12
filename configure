@@ -632,6 +632,7 @@ BUILD_LIBS
 EXTRA_LIBS
 DEVELOP_BUILD
 BUILD_OPENSSL
+BUILD_JSONC
 BUILD_WSLAY
 BUILD_H2O
 BUILD_LIBUV
@@ -716,6 +717,7 @@ enable_build_libuv
 enable_build_h2o
 enable_build_wslay
 enable_build_openssl
+enable_build_json_c
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1348,6 +1350,7 @@ Optional Features:
   --enable-build-h2o      build local h2o
   --enable-build-wslay    build local wslay
   --enable-build-openssl  build local openssl
+  --enable-build-json-c   build local json-c
 
 Some influential environment variables:
   CC          C compiler command
@@ -2126,6 +2129,7 @@ include_libh2o=yes
 include_libwslay=yes
 include_libuv=yes
 include_libopenssl=yes
+include_libjson=yes
 
 
 
@@ -2181,6 +2185,13 @@ if test "${enable_build_openssl+set}" = set; then :
   enableval=$enable_build_openssl; build_libopenssl=yes
 else
   build_libopenssl=no
+fi
+
+# Check whether --enable-build-json-c was given.
+if test "${enable_build_json_c+set}" = set; then :
+  enableval=$enable_build_json_c; build_libjson=yes
+else
+  build_libjson=no
 fi
 
 
@@ -2441,6 +2452,7 @@ then
 	build_libh2o=yes
 	build_libwslay=yes
 	build_libopenssl=yes
+	build_libjson=yes
 fi
 
 # openssl builds two separate .a files
@@ -2481,6 +2493,18 @@ fi
 			libs_ldflags="$libs_ldflags "
 		else
 			libs_ldflags="$(pkg-config libh2o --libs-only-L) $(pkg-config libh2o --libs-only-other) $libs_ldflags"
+		fi
+	fi
+
+
+	if test "$include_libjson" == yes
+	then
+		if test "$build_libjson" == yes
+		then
+			build_libs="$build_libs $root_dir/deps/lib/libjson-c.a"
+			libs_ldflags="$libs_ldflags "
+		else
+			libs_ldflags="$(pkg-config json-c --libs-only-L) $(pkg-config json-c --libs-only-other) $libs_ldflags"
 		fi
 	fi
 
@@ -2526,6 +2550,17 @@ fi
 			link_build_deps="$link_build_deps -lh2o"
 		else
 			link_build_deps="$link_build_deps $(pkg-config libh2o --libs-only-l)"
+		fi
+	fi
+
+
+	if test "$include_libjson" == yes
+	then
+		if test "$build_libjson" == yes
+		then
+			link_build_deps="$link_build_deps -ljson-c"
+		else
+			link_build_deps="$link_build_deps $(pkg-config json-c --libs-only-l)"
 		fi
 	fi
 
@@ -5350,6 +5385,8 @@ BUILD_H2O="$build_libh2o"
 
 BUILD_WSLAY="$build_libwslay"
 
+BUILD_JSONC="$build_libjson"
+
 BUILD_OPENSSL="$build_libopenssl"
 
 DEVELOP_BUILD="$enable_develop"
@@ -5395,6 +5432,8 @@ $as_echo "$as_me: using build_libuv=$build_libuv" >&6;}
 $as_echo "$as_me: using build_libh2o=$build_libh2o" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libwslay=$build_libwslay" >&5
 $as_echo "$as_me: using build_libwslay=$build_libwslay" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: using build_libjson=$build_libjson" >&5
+$as_echo "$as_me: using build_libjson=$build_libjson" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libopenssl=$build_libopenssl" >&5
 $as_echo "$as_me: using build_libopenssl=$build_libopenssl" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using include_libuv=$include_libuv" >&5
@@ -5405,6 +5444,8 @@ $as_echo "$as_me: using include_libh2o=$include_libh2o" >&6;}
 $as_echo "$as_me: using include_libwslay=$include_libwslay" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using include_libopenssl=$include_libopenssl" >&5
 $as_echo "$as_me: using include_libopenssl=$include_libopenssl" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: using include_libjson=$include_libjson" >&5
+$as_echo "$as_me: using include_libjson=$include_libjson" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using BUILD_LIBS=$BUILD_LIBS" >&5
 $as_echo "$as_me: using BUILD_LIBS=$BUILD_LIBS" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using LIBS=$LIBS" >&5

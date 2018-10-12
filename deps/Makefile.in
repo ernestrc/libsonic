@@ -7,9 +7,6 @@ export PREFIX=$(shell pwd)
 
 ROOT_DIR=@ROOT_DIR@
 DEVELOP_BUILD=@DEVELOP_BUILD@
-BUILD_LIBUV=@BUILD_LIBUV@
-BUILD_H2O=@BUILD_H2O@
-BUILD_WSLAY=@BUILD_WSLAY@
 BUILD_LIBS=@BUILD_LIBS@
 
 LIBDIR = $(ROOT_DIR)/deps/lib
@@ -25,6 +22,7 @@ LIBUV = $(LIBDIR)/libuv.a
 LIBWSLAY = $(LIBDIR)/libwslay.a
 LIBCRYPTO = $(LIBDIR)/libcrypto.a
 LIBSSL = $(LIBDIR)/libssl.a
+LIBJSONC = $(LIBDIR)/libjson-c.a
 
 DIRS = $(MANDIR) $(SHAREDIR) $(BINDIR) $(INCDIR) $(LIBDIR)
 
@@ -55,11 +53,11 @@ H2O_OPTS=-DCMAKE_INSTALL_BINDIR=$(BINDIR) -DCMAKE_INSTALL_INCLUDEDIR=$(INCDIR) \
 		 -DWITH_MRUBY=off -DWITH_BUNDLED_SSL=off
 
 $(LIBH2OEV): $(LIBH2O)
-$(LIBH2O): $(LIBWSLAY) $(LIBSSL) | $(DIRS)
+$(LIBH2O): | $(LIBWSLAY) $(LIBSSL) $(DIRS)
 	@ echo "  COMPILING	libh2o"
 	@ cp h2o.patch h2o/h2o.patch
 	@- cd h2o && patch -N -p1 < h2o.patch
-	@ cd h2o && $(H2O_ENV) cmake $(H2O_OPTS) . && make && make install
+	@ cd h2o && $(H2O_ENV) cmake $(H2O_OPTS) . && $(MAKE) && $(MAKE) install
 
 # to maximize compatiblity, as full libslab requires -std=c11/gnu11
 ifeq ($(DEVELOP_BUILD),yes)
@@ -84,6 +82,12 @@ $(LIBSSL): $(OPENSSLDEPS)
 	@ echo "  COMPILING openssl"
 	@ cd openssl && \
 		./config $(OPENSSL_OPTS) $(OPENSSL_CFG) && $(MAKE) $(OPENSSL_OPTS) && $(MAKE) install $(OPENSSL_OPTS)
+
+$(LIBJSONC): | $(DIRS)
+	@ echo "  COMPILING	json-c"
+	@ cd json-c && sh autogen.sh && \
+		./configure $(CONFIGURE_OPTS) && \
+		$(MAKE) && $(MAKE) install
 
 $(LIBDIR) $(BINDIR) $(MANDIR) $(SHAREDIR) $(INCDIR):
 	@ mkdir -p $@

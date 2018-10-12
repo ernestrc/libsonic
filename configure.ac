@@ -11,6 +11,7 @@ include_libh2o=yes
 include_libwslay=yes
 include_libuv=yes
 include_libopenssl=yes
+include_libjson=yes
 
 AC_DEFUN([SET_DEFLAG],[test -z "$$1" && $1="$2";])
 AC_DEFUN([CHECK_BUILD],[
@@ -57,6 +58,7 @@ AC_ARG_ENABLE(build-libuv, [AS_HELP_STRING([--enable-build-libuv], [build local 
 AC_ARG_ENABLE(build-h2o, [AS_HELP_STRING([--enable-build-h2o], [build local h2o])], [build_libh2o=yes], [build_libh2o=no])
 AC_ARG_ENABLE(build-wslay, [AS_HELP_STRING([--enable-build-wslay], [build local wslay])], [build_libwslay=yes], [build_libwslay=no])
 AC_ARG_ENABLE(build-openssl, [AS_HELP_STRING([--enable-build-openssl], [build local openssl])], [build_libopenssl=yes], [build_libopenssl=no])
+AC_ARG_ENABLE(build-json-c, [AS_HELP_STRING([--enable-build-json-c], [build local json-c])], [build_libjson=yes], [build_libjson=no])
 
 AC_CHECK_PROG(PKGCFG,pkg-config,yes)
 if test x"$PKGCFG" != x"yes" ; then
@@ -99,6 +101,7 @@ then
 	build_libh2o=yes
 	build_libwslay=yes
 	build_libopenssl=yes
+	build_libjson=yes
 fi
 
 # openssl builds two separate .a files
@@ -109,11 +112,13 @@ fi
 CHECK_BUILD(libuv, libuv)
 CHECK_BUILD(libwslay, libwslay)
 CHECK_BUILD(libh2o, libh2o)
+CHECK_BUILD(json-c, libjson, -c)
 
 CHECK_LINK(openssl, libopenssl, -lssl -lcrypto)
 CHECK_LINK(libuv, libuv, -luv -lrt -lpthread -ldl)
 CHECK_LINK(libwslay, libwslay, -lwslay)
 CHECK_LINK(libh2o, libh2o, -lh2o)
+CHECK_LINK(json-c, libjson, -ljson-c)
 
 lto=
 if test "$enable_lto" == yes
@@ -221,6 +226,7 @@ AC_CHECK_LIB(pthread, pthread_create, [], [AC_MSG_ERROR([pthread not available])
 AC_SUBST([BUILD_LIBUV], ["$build_libuv"])
 AC_SUBST([BUILD_H2O], ["$build_libh2o"])
 AC_SUBST([BUILD_WSLAY], ["$build_libwslay"])
+AC_SUBST([BUILD_JSONC], ["$build_libjson"])
 AC_SUBST([BUILD_OPENSSL], ["$build_libopenssl"])
 AC_SUBST([DEVELOP_BUILD], ["$enable_develop"])
 AC_SUBST([LIBS], ["$LIBS"])
@@ -244,11 +250,13 @@ AC_MSG_NOTICE([using LDFLAGS=$LDFLAGS])
 AC_MSG_NOTICE([using build_libuv=$build_libuv])
 AC_MSG_NOTICE([using build_libh2o=$build_libh2o])
 AC_MSG_NOTICE([using build_libwslay=$build_libwslay])
+AC_MSG_NOTICE([using build_libjson=$build_libjson])
 AC_MSG_NOTICE([using build_libopenssl=$build_libopenssl])
 AC_MSG_NOTICE([using include_libuv=$include_libuv])
 AC_MSG_NOTICE([using include_libh2o=$include_libh2o])
 AC_MSG_NOTICE([using include_libwslay=$include_libwslay])
 AC_MSG_NOTICE([using include_libopenssl=$include_libopenssl])
+AC_MSG_NOTICE([using include_libjson=$include_libjson])
 AC_MSG_NOTICE([using BUILD_LIBS=$BUILD_LIBS])
 AC_MSG_NOTICE([using LIBS=$LIBS])
 AC_MSG_NOTICE([using EXTRA_LIBS=$EXTRA_LIBS])

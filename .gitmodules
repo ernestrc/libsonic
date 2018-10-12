@@ -1,6 +1,6 @@
 [submodule "deps/slab"]
 	path = deps/slab
-	url = git@github.com:ernestrc/slab.git
+	url = https://github.com/ernestrc/slab.git
 	ignore = dirty
 [submodule "deps/libuv"]
 	path = deps/libuv
@@ -17,4 +17,8 @@
 [submodule "deps/openssl"]
 	path = deps/openssl
 	url = https://github.com/openssl/openssl.git
+	ignore = dirty
+[submodule "deps/json-c"]
+	path = deps/json-c
+	url = https://github.com/json-c/json-c.git
 	ignore = dirty
