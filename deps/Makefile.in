@@ -23,7 +23,7 @@ LIBWSLAY = $(LIBDIR)/libwslay.a
 LIBCRYPTO = $(LIBDIR)/libcrypto.a
 LIBSSL = $(LIBDIR)/libssl.a
 LIBJSONC = $(LIBDIR)/libjson-c.a
-LIBPCRE2 = $(LIBDIR)/libpcre2.a
+LIBPCRE2 = $(LIBDIR)/libpcre2-8.a
 
 DIRS = $(MANDIR) $(SHAREDIR) $(BINDIR) $(INCDIR) $(LIBDIR)
 
@@ -90,10 +90,12 @@ $(LIBJSONC): | $(DIRS)
 		./configure $(CONFIGURE_OPTS) && \
 		$(MAKE) && $(MAKE) install
 
+# for https://www.pcre.org/current/doc/html/pcre2build.html#SEC5
+PCRE2_OPTS=$(CONFIGURE_OPTS) --disable-jit
 $(LIBPCRE2): | $(DIRS)
 	@ echo "  COMPILING libpcre2"
 	@ cd pcre2 && aclocal && automake  && autoconf && \
-		./configure $(CONFIGURE_OPTS) LDFLAGS='$(CFLAGS) $(LDFLAGS)' && $(MAKE) && $(MAKE) install
+		./configure $(PCRE2_OPTS) LDFLAGS='$(CFLAGS) $(LDFLAGS)' && $(MAKE) && $(MAKE) install
 
 $(LIBDIR) $(BINDIR) $(MANDIR) $(SHAREDIR) $(INCDIR):
 	@ mkdir -p $@

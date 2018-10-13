@@ -1,6 +1,6 @@
 CC=@CC@
-CFLAGS=@CFLAGS@
-LDFLAGS=@LDFLAGS@
+CFLAGS=@CFLAGS@ @EXTRA_CFLAGS@
+LDFLAGS=@LDFLAGS@ @EXTRA_LDFLAGS@
 LIBS=@EXTRA_LIBS@ @LIBS@
 DEVELOP_BUILD=@DEVELOP_BUILD@
 ROOT_DIR=@ROOT_DIR@
@@ -45,7 +45,6 @@ $(INCDIR)/sonic/%.h: %.h
 
 clean:
 	@- rm -rf $(INCDIR)/sonic
-	@- rm -rf $(LIBDIR)/objs
 	@- rm -f $(EXEC)
 	@- rm -f $(LIB)
 	@- rm -f $(wildcard *.o)

@@ -632,7 +632,7 @@ BUILD_LIBS
 EXTRA_LIBS
 DEVELOP_BUILD
 BUILD_OPENSSL
-BUILD_PCRE
+BUILD_PCRE2
 BUILD_JSONC
 BUILD_WSLAY
 BUILD_H2O
@@ -714,7 +714,7 @@ enable_option_checking
 enable_lto
 enable_develop
 enable_build_all
-enable_build_pcre
+enable_build_pcre2
 enable_build_libuv
 enable_build_h2o
 enable_build_wslay
@@ -1347,13 +1347,13 @@ Optional Features:
   --enable-develop        enable development build. This sets clang as the
                           compiler and sets a bunch of testing and debugging
                           compiler flags.
-  --enable-build-all      build all local dependencies
-  --enable-build-pcre     build local pcre
-  --enable-build-libuv    build local libuv
-  --enable-build-h2o      build local h2o
-  --enable-build-wslay    build local wslay
-  --enable-build-openssl  build local openssl
-  --enable-build-json-c   build local json-c
+  --enable-build-all      build all dependencies from source
+  --enable-build-pcre2    build pcre2 from source
+  --enable-build-libuv    build libuv from source
+  --enable-build-h2o      build h2o from source
+  --enable-build-wslay    build wslay from source
+  --enable-build-openssl  build openssl from source
+  --enable-build-json-c   build json-c from source
 
 Some influential environment variables:
   CC          C compiler command
@@ -2133,7 +2133,7 @@ include_libwslay=yes
 include_libuv=yes
 include_libopenssl=yes
 include_libjson=yes
-include_libpcre=yes
+include_libpcre2=yes
 
 
 
@@ -2163,11 +2163,11 @@ else
 fi
 
 
-# Check whether --enable-build-pcre was given.
-if test "${enable_build_pcre+set}" = set; then :
-  enableval=$enable_build_pcre; build_libpcre=yes
+# Check whether --enable-build-pcre2 was given.
+if test "${enable_build_pcre2+set}" = set; then :
+  enableval=$enable_build_pcre2; build_libpcre2=yes
 else
-  build_libpcre=no
+  build_libpcre2=no
 fi
 
 # Check whether --enable-build-libuv was given.
@@ -2464,7 +2464,7 @@ then
 	build_libwslay=yes
 	build_libopenssl=yes
 	build_libjson=yes
-	build_libpcre=yes
+	build_libpcre2=yes
 fi
 
 # openssl builds two separate .a files
@@ -2521,14 +2521,14 @@ fi
 	fi
 
 
-	if test "$include_libpcre" == yes
+	if test "$include_libpcre2" == yes
 	then
-		if test "$build_libpcre" == yes
+		if test "$build_libpcre2" == yes
 		then
-			build_libs="$build_libs $root_dir/deps/lib/libpcre.a"
+			build_libs="$build_libs $root_dir/deps/lib/libpcre2-8.a"
 			libs_ldflags="$libs_ldflags "
 		else
-			libs_ldflags="$(pkg-config libpcre --libs-only-L) $(pkg-config libpcre --libs-only-other) $libs_ldflags"
+			libs_ldflags="$(pkg-config libpcre2-8 --libs-only-L) $(pkg-config libpcre2-8 --libs-only-other) $libs_ldflags"
 		fi
 	fi
 
@@ -2589,13 +2589,13 @@ fi
 	fi
 
 
-	if test "$include_libpcre" == yes
+	if test "$include_libpcre2" == yes
 	then
-		if test "$build_libpcre" == yes
+		if test "$build_libpcre2" == yes
 		then
-			link_build_deps="$link_build_deps -lpcre"
+			link_build_deps="$link_build_deps -lpcre2-8"
 		else
-			link_build_deps="$link_build_deps $(pkg-config libpcre --libs-only-l)"
+			link_build_deps="$link_build_deps $(pkg-config libpcre2-8 --libs-only-l)"
 		fi
 	fi
 
@@ -2610,7 +2610,7 @@ if test "$enable_develop" == yes
 then
 	test -z "$CC" && CC="clang";
 	test -z "$CXX" && CXX="clang++";
-	test -z "$EXTRA_CFLAGS" && EXTRA_CFLAGS="-fsanitize=undefined -Wall";
+	test -z "$EXTRA_CFLAGS" && EXTRA_CFLAGS="-fsanitize=address,undefined -Wall";
 	test -z "$CFLAGS" && CFLAGS="$libs_cflags -fsanitize-coverage=trace-cmp,trace-pc-guard -fprofile-instr-generate -fcoverage-mapping -ggdb";
 	test -z "$FUZZFLAGS" && FUZZFLAGS="-max_total_time=60"; $as_echo "#define FUZZFLAGS -max_total_time=60" >>confdefs.h
  FUZZFLAGS=-max_total_time=60
@@ -5014,6 +5014,120 @@ fi
 
 
 
+	if test "$build_libpcre2" == no
+	then
+		if test "$include_libpcre2" == yes
+		then
+			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pcre2_substitute in -lpcre2-8" >&5
+$as_echo_n "checking for pcre2_substitute in -lpcre2-8... " >&6; }
+if ${ac_cv_lib_pcre2_8_pcre2_substitute+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpcre2-8  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char pcre2_substitute ();
+int
+main ()
+{
+return pcre2_substitute ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_pcre2_8_pcre2_substitute=yes
+else
+  ac_cv_lib_pcre2_8_pcre2_substitute=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pcre2_8_pcre2_substitute" >&5
+$as_echo "$ac_cv_lib_pcre2_8_pcre2_substitute" >&6; }
+if test "x$ac_cv_lib_pcre2_8_pcre2_substitute" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBPCRE2_8 1
+_ACEOF
+
+  LIBS="-lpcre2-8 $LIBS"
+
+else
+  as_fn_error $? "pcre2 is not installed" "$LINENO" 5
+fi
+
+		fi
+	else
+		echo "nothing to check for pcre2"
+	fi
+
+
+	if test "$build_libjson-c" == no
+	then
+		if test "$include_libjson-c" == yes
+		then
+			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for json_object_object_get_ex in -ljson-c" >&5
+$as_echo_n "checking for json_object_object_get_ex in -ljson-c... " >&6; }
+if ${ac_cv_lib_json_c_json_object_object_get_ex+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-ljson-c  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char json_object_object_get_ex ();
+int
+main ()
+{
+return json_object_object_get_ex ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_json_c_json_object_object_get_ex=yes
+else
+  ac_cv_lib_json_c_json_object_object_get_ex=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_json_c_json_object_object_get_ex" >&5
+$as_echo "$ac_cv_lib_json_c_json_object_object_get_ex" >&6; }
+if test "x$ac_cv_lib_json_c_json_object_object_get_ex" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBJSON_C 1
+_ACEOF
+
+  LIBS="-ljson-c $LIBS"
+
+else
+  as_fn_error $? "json-c is not installed" "$LINENO" 5
+fi
+
+		fi
+	else
+		echo "nothing to check for json-c"
+	fi
+
+
 	if test "$build_libwslay" == no
 	then
 		if test "$include_libwslay" == yes
@@ -5422,7 +5536,7 @@ BUILD_WSLAY="$build_libwslay"
 
 BUILD_JSONC="$build_libjson"
 
-BUILD_PCRE="$build_libpcre"
+BUILD_PCRE2="$build_libpcre2"
 
 BUILD_OPENSSL="$build_libopenssl"
 
@@ -5471,8 +5585,8 @@ $as_echo "$as_me: using build_libh2o=$build_libh2o" >&6;}
 $as_echo "$as_me: using build_libwslay=$build_libwslay" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libjson=$build_libjson" >&5
 $as_echo "$as_me: using build_libjson=$build_libjson" >&6;}
-{ $as_echo "$as_me:${as_lineno-$LINENO}: using build_libpcre=$build_libpcre" >&5
-$as_echo "$as_me: using build_libpcre=$build_libpcre" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: using build_libpcre2=$build_libpcre2" >&5
+$as_echo "$as_me: using build_libpcre2=$build_libpcre2" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libopenssl=$build_libopenssl" >&5
 $as_echo "$as_me: using build_libopenssl=$build_libopenssl" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using include_libuv=$include_libuv" >&5
@@ -5485,6 +5599,8 @@ $as_echo "$as_me: using include_libwslay=$include_libwslay" >&6;}
 $as_echo "$as_me: using include_libopenssl=$include_libopenssl" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using include_libjson=$include_libjson" >&5
 $as_echo "$as_me: using include_libjson=$include_libjson" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: using include_libpcre2=$include_libpcre2" >&5
+$as_echo "$as_me: using include_libpcre2=$include_libpcre2" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using BUILD_LIBS=$BUILD_LIBS" >&5
 $as_echo "$as_me: using BUILD_LIBS=$BUILD_LIBS" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using LIBS=$LIBS" >&5

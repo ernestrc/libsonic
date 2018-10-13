@@ -12,7 +12,7 @@ include_libwslay=yes
 include_libuv=yes
 include_libopenssl=yes
 include_libjson=yes
-include_libpcre=yes
+include_libpcre2=yes
 
 AC_DEFUN([SET_DEFLAG],[test -z "$$1" && $1="$2";])
 AC_DEFUN([CHECK_BUILD],[
@@ -53,14 +53,14 @@ AC_DEFUN([SET_DEFLAG_DEFINE],[test -z "$$1" && $1="$2"; AC_DEFINE($1, $2) AC_SUB
 
 AC_ARG_ENABLE(lto, [AS_HELP_STRING([--enable-lto], [enable link time optimizations (-flto). If custom CFLAGS are passed, this option has no effect.])], [enable_lto=yes], [enable_lto=no])
 AC_ARG_ENABLE(develop, [AS_HELP_STRING([--enable-develop], [enable development build. This sets clang as the compiler and sets a bunch of testing and debugging compiler flags.])], [enable_develop=yes], [enable_develop=no])
-AC_ARG_ENABLE(build-all, [AS_HELP_STRING([--enable-build-all], [build all local dependencies])], [build_all=yes], [build_all=no])
+AC_ARG_ENABLE(build-all, [AS_HELP_STRING([--enable-build-all], [build all dependencies from source])], [build_all=yes], [build_all=no])
 
-AC_ARG_ENABLE(build-pcre, [AS_HELP_STRING([--enable-build-pcre], [build local pcre])], [build_libpcre=yes], [build_libpcre=no])
-AC_ARG_ENABLE(build-libuv, [AS_HELP_STRING([--enable-build-libuv], [build local libuv])], [build_libuv=yes], [build_libuv=no])
-AC_ARG_ENABLE(build-h2o, [AS_HELP_STRING([--enable-build-h2o], [build local h2o])], [build_libh2o=yes], [build_libh2o=no])
-AC_ARG_ENABLE(build-wslay, [AS_HELP_STRING([--enable-build-wslay], [build local wslay])], [build_libwslay=yes], [build_libwslay=no])
-AC_ARG_ENABLE(build-openssl, [AS_HELP_STRING([--enable-build-openssl], [build local openssl])], [build_libopenssl=yes], [build_libopenssl=no])
-AC_ARG_ENABLE(build-json-c, [AS_HELP_STRING([--enable-build-json-c], [build local json-c])], [build_libjson=yes], [build_libjson=no])
+AC_ARG_ENABLE(build-pcre2, [AS_HELP_STRING([--enable-build-pcre2], [build pcre2 from source])], [build_libpcre2=yes], [build_libpcre2=no])
+AC_ARG_ENABLE(build-libuv, [AS_HELP_STRING([--enable-build-libuv], [build libuv from source])], [build_libuv=yes], [build_libuv=no])
+AC_ARG_ENABLE(build-h2o, [AS_HELP_STRING([--enable-build-h2o], [build h2o from source])], [build_libh2o=yes], [build_libh2o=no])
+AC_ARG_ENABLE(build-wslay, [AS_HELP_STRING([--enable-build-wslay], [build wslay from source])], [build_libwslay=yes], [build_libwslay=no])
+AC_ARG_ENABLE(build-openssl, [AS_HELP_STRING([--enable-build-openssl], [build openssl from source])], [build_libopenssl=yes], [build_libopenssl=no])
+AC_ARG_ENABLE(build-json-c, [AS_HELP_STRING([--enable-build-json-c], [build json-c from source])], [build_libjson=yes], [build_libjson=no])
 
 AC_CHECK_PROG(PKGCFG,pkg-config,yes)
 if test x"$PKGCFG" != x"yes" ; then
@@ -104,7 +104,7 @@ then
 	build_libwslay=yes
 	build_libopenssl=yes
 	build_libjson=yes
-	build_libpcre=yes
+	build_libpcre2=yes
 fi
 
 # openssl builds two separate .a files
@@ -116,14 +116,14 @@ CHECK_BUILD(libuv, libuv)
 CHECK_BUILD(libwslay, libwslay)
 CHECK_BUILD(libh2o, libh2o)
 CHECK_BUILD(json-c, libjson, -c)
-CHECK_BUILD(libpcre, libpcre)
+CHECK_BUILD(libpcre2-8, libpcre2, -8)
 
 CHECK_LINK(openssl, libopenssl, -lssl -lcrypto)
 CHECK_LINK(libuv, libuv, -luv -lrt -lpthread -ldl)
 CHECK_LINK(libwslay, libwslay, -lwslay)
 CHECK_LINK(libh2o, libh2o, -lh2o)
 CHECK_LINK(json-c, libjson, -ljson-c)
-CHECK_LINK(libpcre, libpcre, -lpcre)
+CHECK_LINK(libpcre2-8, libpcre2, -lpcre2-8)
 
 lto=
 if test "$enable_lto" == yes
@@ -135,7 +135,7 @@ if test "$enable_develop" == yes
 then
 	SET_DEFLAG(CC, [clang])
 	SET_DEFLAG(CXX, [clang++])
-	SET_DEFLAG(EXTRA_CFLAGS,[-fsanitize=undefined -Wall])
+	SET_DEFLAG(EXTRA_CFLAGS,[-fsanitize=address,undefined -Wall])
 	SET_DEFLAG(CFLAGS,[$libs_cflags -fsanitize-coverage=trace-cmp,trace-pc-guard -fprofile-instr-generate -fcoverage-mapping -ggdb])
 	SET_DEFLAG_DEFINE(FUZZFLAGS,[-max_total_time=60]) # fuzzer flags
 	AC_DEFINE(SONIC_DEBUG)
@@ -200,6 +200,8 @@ CHECK_LIB(libh2o, [AC_CHECK_LIB(h2o, h2o_context_init, [], [AC_MSG_ERROR([h2o no
 	fi
 ])
 
+CHECK_LIB(libpcre2, [AC_CHECK_LIB(pcre2-8, pcre2_substitute, [], [AC_MSG_ERROR([pcre2 is not installed])])], [echo "nothing to check for pcre2"])
+CHECK_LIB(libjson-c, [AC_CHECK_LIB(json-c, json_object_object_get_ex, [], [AC_MSG_ERROR([json-c is not installed])])], [echo "nothing to check for json-c"])
 CHECK_LIB(libwslay, [AC_CHECK_LIB(wslay, wslay_frame_recv, [], [AC_MSG_ERROR([wslay not installed])])], [
 	AC_CHECK_PROG(AUTORECONFPROG,autoreconf,yes)
 	if test x"$AUTORECONFPROG" != x"yes" ; then
@@ -232,7 +234,7 @@ AC_SUBST([BUILD_LIBUV], ["$build_libuv"])
 AC_SUBST([BUILD_H2O], ["$build_libh2o"])
 AC_SUBST([BUILD_WSLAY], ["$build_libwslay"])
 AC_SUBST([BUILD_JSONC], ["$build_libjson"])
-AC_SUBST([BUILD_PCRE], ["$build_libpcre"])
+AC_SUBST([BUILD_PCRE2], ["$build_libpcre2"])
 AC_SUBST([BUILD_OPENSSL], ["$build_libopenssl"])
 AC_SUBST([DEVELOP_BUILD], ["$enable_develop"])
 AC_SUBST([LIBS], ["$LIBS"])
@@ -257,13 +259,14 @@ AC_MSG_NOTICE([using build_libuv=$build_libuv])
 AC_MSG_NOTICE([using build_libh2o=$build_libh2o])
 AC_MSG_NOTICE([using build_libwslay=$build_libwslay])
 AC_MSG_NOTICE([using build_libjson=$build_libjson])
-AC_MSG_NOTICE([using build_libpcre=$build_libpcre])
+AC_MSG_NOTICE([using build_libpcre2=$build_libpcre2])
 AC_MSG_NOTICE([using build_libopenssl=$build_libopenssl])
 AC_MSG_NOTICE([using include_libuv=$include_libuv])
 AC_MSG_NOTICE([using include_libh2o=$include_libh2o])
 AC_MSG_NOTICE([using include_libwslay=$include_libwslay])
 AC_MSG_NOTICE([using include_libopenssl=$include_libopenssl])
 AC_MSG_NOTICE([using include_libjson=$include_libjson])
+AC_MSG_NOTICE([using include_libpcre2=$include_libpcre2])
 AC_MSG_NOTICE([using BUILD_LIBS=$BUILD_LIBS])
 AC_MSG_NOTICE([using LIBS=$LIBS])
 AC_MSG_NOTICE([using EXTRA_LIBS=$EXTRA_LIBS])

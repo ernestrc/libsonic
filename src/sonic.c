@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
 #include <stdbool.h>
@@ -9,8 +10,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#include <slab/buf.h>
+
 #include "cli_config.h"
 #include "config.h"
+
+#define BUF_INIT_CAP 1024 * 64
 
 #define debug_printf_chunk(tmpl, ...)                                          \
 	if (args.verbose) {                                                        \
@@ -27,18 +34,18 @@
 	all_free();                                                                \
 	exit(status);
 
-typedef struct definevar_s {
+struct definevar_s {
 	struct definevar_s* next;
 	char* key;
 	char* val;
-} definevar_t;
+};
 
 struct args_s {
 	const char* literal;
 	const char* file;
 	const char* source;
 	const char* config;
-	definevar_t* define;
+	struct definevar_s* define;
 	bool rows_only;
 	bool verbose;
 	bool silent;
@@ -48,6 +55,8 @@ int pret;
 char* default_cfg_path;
 struct args_s args;
 struct config_s* config;
+char* query;
+buf_t* query_buf;
 
 void print_version() { printf("sonic %s\n", SONIC_VERSION); }
 
@@ -89,10 +98,10 @@ void print_usage(const char* argv0)
 	  argv0, args.config);
 }
 
-void args_define_free(definevar_t* define)
+void args_define_free(struct definevar_s* define)
 {
-	for (definevar_t* next = define; next != NULL;) {
-		definevar_t* tmp = next->next;
+	for (struct definevar_s* next = define; next != NULL;) {
+		struct definevar_s* tmp = next->next;
 		free(next->key);
 		free(next);
 		next = tmp;
@@ -107,6 +116,9 @@ void args_free()
 
 void all_free()
 {
+	if (query)
+		free(query);
+	buf_free(query_buf);
 	config_free(config);
 	args_free();
 }
@@ -116,6 +128,178 @@ long long current_timestamp()
 	struct timeval te;
 	gettimeofday(&te, NULL);
 	return te.tv_sec * 1000LL + te.tv_usec / 1000;
+}
+
+char* query_literal_replace_substitute(
+  pcre2_code* code, char* query, buf_t* buf, char* value)
+{
+	PCRE2_SIZE outlengthptr = buf_writable(buf);
+	PCRE2_UCHAR errorbuf[512];
+
+	int n = pcre2_substitute(code, (PCRE2_SPTR8)query, PCRE2_ZERO_TERMINATED, 0,
+	  PCRE2_SUBSTITUTE_GLOBAL, NULL, NULL, (PCRE2_SPTR8)value,
+	  PCRE2_ZERO_TERMINATED, (PCRE2_UCHAR8*)buf->next_write, &outlengthptr);
+	if (n < 0) {
+		pcre2_get_error_message(n, errorbuf, sizeof(errorbuf));
+		printf(
+		  "query_literal_replace_substitute: PCRE2 failed: %s\n", errorbuf);
+		errno = EINVAL;
+		return NULL;
+	}
+
+	// redundant but good to decouple from caller
+	buf_extend(buf, outlengthptr);
+
+	return strdup(buf->next_read);
+}
+
+pcre2_code* query_literal_replace_compile(char* pattern)
+{
+	uint32_t options = PCRE2_MULTILINE | PCRE2_CASELESS;
+	pcre2_code* code = NULL;
+	PCRE2_SIZE erroroffset;
+	PCRE2_UCHAR errorbuf[512];
+	int errorcode;
+
+	if ((code = pcre2_compile((PCRE2_SPTR8)pattern, PCRE2_ZERO_TERMINATED,
+		   options, &errorcode, &erroroffset, NULL)) == NULL) {
+		pcre2_get_error_message(errorcode, errorbuf, sizeof(errorbuf));
+		printf("query_literal_replace_compile: PCRE2 failed at "
+			   "offset %d: %s\n",
+		  (int)erroroffset, errorbuf);
+		errno = EINVAL;
+		return NULL;
+	}
+
+	debug_printf("compiled pattern '%s' into pcre2 code", pattern);
+
+	return code;
+}
+
+// responsible of freeing query and return a replaced new string if success
+// responsible of freeing query and any other storage allocated if error
+// buffer is just a working buffer, returned query should be a strdup of the
+char* query_literal_replace_define(
+  char* query, buf_t* buf, struct definevar_s* define)
+{
+#define DEFINE_TEMPLATE "\\$\\{%s\\}"
+#define DEFINE_TEMPLATE_LEN (strlen(pattern))
+	char* pattern = NULL;
+	char* result = NULL;
+	pcre2_code* code = NULL;
+	int lerrno = 0;
+	int need;
+
+	need = snprintf(NULL, 0, DEFINE_TEMPLATE, define->key);
+	if ((pattern = malloc(need + 1)) == NULL) {
+		perror("malloc");
+		errno = ENOMEM;
+		goto exit;
+	}
+	sprintf(pattern, DEFINE_TEMPLATE, define->key);
+
+	// reset buffer offsets so it can be used by substitution routine
+	buf_reset_offsets(buf);
+
+	// make sure that buffer has enough space for the substitution
+	if (buf_reserve(
+		  buf, strlen(query) - DEFINE_TEMPLATE_LEN + strlen(define->val)) != 0)
+		goto exit;
+
+	if ((code = query_literal_replace_compile(pattern)) == NULL)
+		goto exit;
+
+	result = query_literal_replace_substitute(code, query, buf, define->val);
+
+exit:
+	lerrno = errno;
+	free(query);
+	if (pattern)
+		free(pattern);
+	if (code)
+		pcre2_code_free(code);
+	errno = lerrno;
+	return result;
+}
+
+char* query_literal_init(
+  const char* literal, struct definevar_s* define, buf_t* buf)
+{
+	char* query;
+	int lerrno;
+
+	if ((query = strdup(literal)) == NULL) {
+		perror("malloc");
+		errno = ENOMEM;
+		goto error;
+	}
+
+	for (struct definevar_s* next = define; next != NULL; next = next->next)
+		if ((query = query_literal_replace_define(query, buf, next)) == NULL)
+			goto error;
+
+	return query;
+
+error:
+	lerrno = errno;
+	if (query)
+		free(query);
+	errno = lerrno;
+	return NULL;
+}
+
+int query_file_read(buf_t* buf, int fd)
+{
+	int n;
+	while (1) {
+		errno = 0;
+		n = read(fd, buf->buf, buf_writable(buf));
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			return n;
+		}
+		if (n == 0) {
+			if (buf_writable(buf) == 0) {
+				buf_reserve(buf, BUF_INIT_CAP);
+				continue;
+			}
+			break;
+		}
+		buf_extend(buf, n);
+	}
+
+	if (buf_writable(buf) == 0) {
+		buf_reserve(buf, 1);
+	}
+	*buf->next_write = '\x00';
+
+	debug_printf("read query from file: %s", buf->buf);
+
+	return 0;
+}
+
+char* query_file_init(
+  const char* filename, struct definevar_s* define, buf_t* buf)
+{
+	char* query = NULL;
+	int lerrno = 0;
+	int fd = 0;
+
+	if ((fd = open(filename, O_RDONLY)) < 0)
+		goto exit;
+
+	if (query_file_read(buf, fd) != 0)
+		goto exit;
+
+	query = query_literal_init(buf->buf, define, buf);
+
+exit:
+	lerrno = errno;
+	if (fd)
+		close(fd);
+	errno = lerrno;
+	return query;
 }
 
 void assert_args_coherent(const char* argv0)
@@ -144,7 +328,7 @@ error:
 	do_exit(1);
 }
 
-definevar_t* parse_define(definevar_t* head, char* arg)
+struct definevar_s* parse_define(struct definevar_s* head, char* arg)
 {
 	if (arg == NULL)
 		return NULL;
@@ -157,7 +341,7 @@ definevar_t* parse_define(definevar_t* head, char* arg)
 		perror("strdup");
 		return NULL;
 	}
-	definevar_t* var = calloc(1, sizeof(definevar_t));
+	struct definevar_s* var = calloc(1, sizeof(struct definevar_s));
 	if (var == NULL) {
 		free(buf);
 		perror("calloc");
@@ -270,7 +454,8 @@ void args_init(int argc, char* argv[])
 	debug_printf(
 	  "parsed_args: literal: %s, file: %s, source: %s, config: %s, define:",
 	  args.literal, args.file, args.source, args.config);
-	for (definevar_t* next = args.define; next != NULL; next = next->next) {
+	for (struct definevar_s* next = args.define; next != NULL;
+		 next = next->next) {
 		debug_printf_chunk(" '%s'->'%s'", next->key, next->val);
 	}
 	debug_printf_chunk(", rows_only: %d, verbose: %d, silent: %d\n",
@@ -284,6 +469,24 @@ int main(int argc, char* argv[])
 		pret = 1;
 		goto exit;
 	}
+
+	if ((query_buf = buf_create(BUF_INIT_CAP)) == NULL)
+		goto exit;
+
+	if (args.file &&
+	  (query = query_file_init(args.file, args.define, query_buf)) == NULL) {
+		perror("query_file_init");
+		pret = 1;
+		goto exit;
+	} else if (args.literal &&
+	  (query = query_literal_init(args.literal, args.define, query_buf)) ==
+		NULL) {
+		perror("query_literal_init");
+		pret = 1;
+		goto exit;
+	}
+
+	debug_printf("running query:\n----------\n%s\n----------\n", query);
 
 exit:
 	all_free();

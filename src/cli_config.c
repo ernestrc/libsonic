@@ -3,6 +3,16 @@
 
 #include "cli_config.h"
 
+static void config_free_sources(struct config_s* config)
+{
+	for (struct source_s* next = config->sources; next != NULL;) {
+		struct source_s* tmp = next->next;
+		free(next);
+		next = tmp;
+	}
+	config->sources = NULL;
+}
+
 static const char* config_parse_sources(
   struct config_s* config, json_object* obj)
 {
@@ -30,18 +40,12 @@ static const char* config_parse_sources(
 
 	return NULL;
 error:
-	for (struct source_s* next = config->sources; next != NULL;) {
-		struct source_s* tmp = next->next;
-		free(next);
-		next = tmp;
-	}
-	config->sources = NULL;
+	config_free_sources(config);
 	return err;
 }
 
 static const char* config_parse(struct config_s* config, json_object* obj)
 {
-	const char* config_err = NULL;
 	json_object* host = NULL;
 	json_object* port = NULL;
 	json_object* sources = NULL;
@@ -86,6 +90,8 @@ int config_init(struct config_s* config, const char* cfg_file)
 	if ((config_err = config_parse(config, obj)) != NULL)
 		goto error;
 
+	config->origin = obj;
+
 	return 0;
 
 error:
@@ -115,6 +121,7 @@ struct config_s* config_create(const char* cfg_file)
 void config_free(struct config_s* config)
 {
 	if (config) {
+		config_free_sources(config);
 		json_object_put(config->origin);
 		free(config);
 	}
