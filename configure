@@ -632,6 +632,7 @@ BUILD_LIBS
 EXTRA_LIBS
 DEVELOP_BUILD
 BUILD_OPENSSL
+BUILD_PCRE
 BUILD_JSONC
 BUILD_WSLAY
 BUILD_H2O
@@ -713,6 +714,7 @@ enable_option_checking
 enable_lto
 enable_develop
 enable_build_all
+enable_build_pcre
 enable_build_libuv
 enable_build_h2o
 enable_build_wslay
@@ -1346,6 +1348,7 @@ Optional Features:
                           compiler and sets a bunch of testing and debugging
                           compiler flags.
   --enable-build-all      build all local dependencies
+  --enable-build-pcre     build local pcre
   --enable-build-libuv    build local libuv
   --enable-build-h2o      build local h2o
   --enable-build-wslay    build local wslay
@@ -2130,6 +2133,7 @@ include_libwslay=yes
 include_libuv=yes
 include_libopenssl=yes
 include_libjson=yes
+include_libpcre=yes
 
 
 
@@ -2158,6 +2162,13 @@ else
   build_all=no
 fi
 
+
+# Check whether --enable-build-pcre was given.
+if test "${enable_build_pcre+set}" = set; then :
+  enableval=$enable_build_pcre; build_libpcre=yes
+else
+  build_libpcre=no
+fi
 
 # Check whether --enable-build-libuv was given.
 if test "${enable_build_libuv+set}" = set; then :
@@ -2453,6 +2464,7 @@ then
 	build_libwslay=yes
 	build_libopenssl=yes
 	build_libjson=yes
+	build_libpcre=yes
 fi
 
 # openssl builds two separate .a files
@@ -2509,6 +2521,18 @@ fi
 	fi
 
 
+	if test "$include_libpcre" == yes
+	then
+		if test "$build_libpcre" == yes
+		then
+			build_libs="$build_libs $root_dir/deps/lib/libpcre.a"
+			libs_ldflags="$libs_ldflags "
+		else
+			libs_ldflags="$(pkg-config libpcre --libs-only-L) $(pkg-config libpcre --libs-only-other) $libs_ldflags"
+		fi
+	fi
+
+
 
 	if test "$include_libopenssl" == yes
 	then
@@ -2561,6 +2585,17 @@ fi
 			link_build_deps="$link_build_deps -ljson-c"
 		else
 			link_build_deps="$link_build_deps $(pkg-config json-c --libs-only-l)"
+		fi
+	fi
+
+
+	if test "$include_libpcre" == yes
+	then
+		if test "$build_libpcre" == yes
+		then
+			link_build_deps="$link_build_deps -lpcre"
+		else
+			link_build_deps="$link_build_deps $(pkg-config libpcre --libs-only-l)"
 		fi
 	fi
 
@@ -5387,6 +5422,8 @@ BUILD_WSLAY="$build_libwslay"
 
 BUILD_JSONC="$build_libjson"
 
+BUILD_PCRE="$build_libpcre"
+
 BUILD_OPENSSL="$build_libopenssl"
 
 DEVELOP_BUILD="$enable_develop"
@@ -5434,6 +5471,8 @@ $as_echo "$as_me: using build_libh2o=$build_libh2o" >&6;}
 $as_echo "$as_me: using build_libwslay=$build_libwslay" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libjson=$build_libjson" >&5
 $as_echo "$as_me: using build_libjson=$build_libjson" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: using build_libpcre=$build_libpcre" >&5
+$as_echo "$as_me: using build_libpcre=$build_libpcre" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using build_libopenssl=$build_libopenssl" >&5
 $as_echo "$as_me: using build_libopenssl=$build_libopenssl" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: using include_libuv=$include_libuv" >&5
