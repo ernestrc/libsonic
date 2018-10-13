@@ -1,0 +1,52 @@
+CC=@CC@
+CFLAGS=@CFLAGS@
+LDFLAGS=@LDFLAGS@
+LIBS=@EXTRA_LIBS@ @LIBS@
+DEVELOP_BUILD=@DEVELOP_BUILD@
+ROOT_DIR=@ROOT_DIR@
+
+LIBDEPS=$(ROOT_DIR)/deps/lib
+INCDIR=$(ROOT_DIR)/include
+BINDIR =$(ROOT_DIR)/bin
+LIBDIR =$(ROOT_DIR)/lib
+
+EXEC_SRC = sonic.c
+EXEC_OBJ = sonic.o
+SRCS = $(wildcard *.c)
+OBJS = $(filter-out $(EXEC_OBJ), $(patsubst %.c,%.o,$(SRCS)))
+EXEC = $(addprefix $(BINDIR)/,$(patsubst %.c,%,$(EXEC_SRC)))
+LIB = $(LIBDIR)/libsonic.a
+
+.PHONY: clean install
+
+default: src
+
+ifeq ($(DEVELOP_BUILD),yes)
+src: $(LIB) $(EXEC)
+else
+src: $(LIB) $(EXEC)
+endif
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $<
+
+$(LIB): $(OBJS)
+	@ mkdir -p $(INCDIR)/sonic
+	@ echo "  AR	$@"
+	@ $(AR) rcs $(LIB) $(OBJS)
+	@ ranlib $(LIB)
+
+$(BINDIR)/%: %.c $(LIB)
+	$(CC) -o $@ $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LIBS)
+
+$(INCDIR)/sonic/%.h: %.h
+	@ cd ../include/sonic && \
+		ln -s $(subst $(INCDIR)/,../../src/,$@) $(subst $(INCDIR)/,,$@)
+
+clean:
+	@- rm -rf $(INCDIR)/sonic
+	@- rm -rf $(LIBDIR)/objs
+	@- rm -f $(EXEC)
+	@- rm -f $(LIB)
+	@- rm -f $(wildcard *.o)
+	@ rm -f *.profraw

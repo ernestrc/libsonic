@@ -1,0 +1,14 @@
+#ifndef SONIC_CONFIG_H
+#define SONIC_CONFIG_H
+
+#undef SONIC_DEBUG
+#undef SONIC_VERSION
+#undef SONIC_INLINE
+
+#ifdef SONIC_INLINE
+#define INLINE inline
+#else
+#define INLINE
+#endif
+
+#endif
