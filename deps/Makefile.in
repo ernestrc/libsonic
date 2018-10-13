@@ -23,7 +23,7 @@ LIBWSLAY = $(LIBDIR)/libwslay.a
 LIBCRYPTO = $(LIBDIR)/libcrypto.a
 LIBSSL = $(LIBDIR)/libssl.a
 LIBJSONC = $(LIBDIR)/libjson-c.a
-LIBPCRE = $(LIBDIR)/libpcre.a
+LIBPCRE2 = $(LIBDIR)/libpcre2.a
 
 DIRS = $(MANDIR) $(SHAREDIR) $(BINDIR) $(INCDIR) $(LIBDIR)
 
@@ -90,11 +90,9 @@ $(LIBJSONC): | $(DIRS)
 		./configure $(CONFIGURE_OPTS) && \
 		$(MAKE) && $(MAKE) install
 
-$(LIBPCRE): | $(DIRS)
-	@ echo "  COMPILING libpcre"
-	@ cp pcre.patch pcre/pcre.patch
-	@- cd pcre && patch -N -p1 < pcre.patch
-	@ cd pcre && aclocal && automake  && autoconf && \
+$(LIBPCRE2): | $(DIRS)
+	@ echo "  COMPILING libpcre2"
+	@ cd pcre2 && aclocal && automake  && autoconf && \
 		./configure $(CONFIGURE_OPTS) LDFLAGS='$(CFLAGS) $(LDFLAGS)' && $(MAKE) && $(MAKE) install
 
 $(LIBDIR) $(BINDIR) $(MANDIR) $(SHAREDIR) $(INCDIR):

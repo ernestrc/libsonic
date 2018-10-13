@@ -22,7 +22,7 @@
 	path = deps/json-c
 	url = https://github.com/json-c/json-c.git
 	ignore = dirty
-[submodule "deps/pcre"]
-	path = deps/pcre
-	url = https://github.com/luvit/pcre.git
+[submodule "deps/pcre2"]
+	path = deps/pcre2
+	url = https://github.com/luvit/pcre2.git
 	ignore = dirty
