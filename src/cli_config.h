@@ -11,8 +11,9 @@ struct source_s {
 
 struct config_s {
 	json_object* origin;
-	const char* host;
-	int port;
+	const char* url;
+	int io_timeout;
+	int websocket_timeout;
 	struct source_s* sources;
 };
 

@@ -46,33 +46,51 @@ error:
 
 static const char* config_parse(struct config_s* config, json_object* obj)
 {
-	json_object* host = NULL;
-	json_object* port = NULL;
+	json_object* url = NULL;
 	json_object* sources = NULL;
+	json_object* io_timeout = NULL;
+	json_object* websocket_timeout = NULL;
 
-	if (!json_object_object_get_ex(obj, "host", &host)) {
-		return "config_parse: missing 'host' key in config file";
+	if (!json_object_object_get_ex(obj, "url", &url)) {
+		return "config_parse: missing 'url' key in config file";
 	}
-	if (!json_object_object_get_ex(obj, "tcp_port", &port)) {
-		return "config_parse: missing 'tcp_port' key in config file";
+
+	if (!json_object_is_type(url, json_type_string)) {
+		return "config_parse: unexpected type for 'url' key in config file";
 	}
+	config->url = json_object_get_string(url);
+
+
+	if (json_object_object_get_ex(obj, "io_timeout", &io_timeout)) {
+		if (!json_object_is_type(io_timeout, json_type_int)) {
+			return "config_parse: unexpected type for 'io_timeout' key in "
+				   "config "
+				   "file";
+		}
+		config->io_timeout = json_object_get_int(io_timeout);
+	} else {
+		config->io_timeout = 0; // will use default
+	}
+
+	if (json_object_object_get_ex(
+		  obj, "websocket_timeout", &websocket_timeout)) {
+		if (!json_object_is_type(websocket_timeout, json_type_int)) {
+			return "config_parse: unexpected type for 'websocket_timeout' key "
+				   "in config "
+				   "file";
+		}
+		config->websocket_timeout = json_object_get_int(websocket_timeout);
+	} else {
+		config->websocket_timeout = 0; // will use default
+	}
+
 	if (!json_object_object_get_ex(obj, "sources", &sources)) {
 		return "config_parse: missing 'sources' key in config file";
 	}
 
-	if (!json_object_is_type(host, json_type_string)) {
-		return "config_parse: unexpected type for 'host' key in config file";
-	}
-	if (!json_object_is_type(port, json_type_int)) {
-		return "config_parse: unexpected type for 'tcp_port' key in config "
-			   "file";
-	}
 	if (!json_object_is_type(sources, json_type_object)) {
 		return "config_parse: unexpected type for 'sources' key in config file";
 	}
-
-	config->port = json_object_get_int(port);
-	config->host = json_object_get_string(host);
 
 	return config_parse_sources(config, sources);
 }
