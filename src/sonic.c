@@ -13,8 +13,11 @@
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 #include <slab/buf.h>
+#include <uv.h>
+#include <h2o.h>
 
 #include "cli_config.h"
+#include "client.h"
 #include "config.h"
 
 #define BUF_INIT_CAP 1024 * 64
@@ -45,6 +48,7 @@ struct args_s {
 	const char* file;
 	const char* source;
 	const char* config;
+	long io_timeout;
 	struct definevar_s* define;
 	bool rows_only;
 	bool verbose;
@@ -57,6 +61,8 @@ struct args_s args;
 struct config_s* config;
 char* query;
 buf_t* query_buf;
+uv_loop_t* loop;
+struct sonic_client* client;
 
 void print_version() { printf("sonic %s\n", SONIC_VERSION); }
 
@@ -90,12 +96,13 @@ void print_usage(const char* argv0)
 	  "  -c, --config=<config> 	Use configuration file [default: %2$s]\n"
 	  "  -d, --define=<foo=var>	Replace variable `${foo}` with value `var`\n"
 	  "  -r, --rows-only		Skip printing column names\n"
+	  "  -t, --io-timeout		I/O timeout [default: %3$ld]\n"
 	  "  -S, --silent			Disable progress bar\n"
 	  "  -V, --verbose			Enable debug level logging\n"
 	  "  -h, --help			Print this message\n"
 	  "  -v, --version			Print version\n"
 	  "\n",
-	  argv0, args.config);
+	  argv0, args.config, args.io_timeout);
 }
 
 void args_define_free(struct definevar_s* define)
@@ -116,8 +123,13 @@ void args_free()
 
 void all_free()
 {
+	if (loop) {
+		uv_loop_close(loop);
+		free(loop);
+	}
 	if (query)
 		free(query);
+	sonic_client_free(client);
 	buf_free(query_buf);
 	config_free(config);
 	args_free();
@@ -392,11 +404,13 @@ void args_init(int argc, char* argv[])
 	args.rows_only = false;
 	args.verbose = false;
 	args.silent = false;
+	args.io_timeout = 2000;
 
 	static struct option long_options[] = {
 	  {"execute", required_argument, 0, 'e'},
 	  {"file", required_argument, 0, 'f'},
 	  {"config", required_argument, 0, 'c'},
+	  {"io-timeout", required_argument, 0, 't'},
 	  {"define", required_argument, 0, 'd'}, {"rows-only", no_argument, 0, 'r'},
 	  {"silent", no_argument, 0, 'S'}, {"verbose", no_argument, 0, 'V'},
 	  {"help", no_argument, 0, 'h'}, {"version", no_argument, 0, 'v'},
@@ -404,9 +418,10 @@ void args_init(int argc, char* argv[])
 
 	int option_index = 0;
 	int c = 0;
-	while ((c = getopt_long(argc, argv, "e:f:c:d:rSVhv", long_options,
+	while ((c = getopt_long(argc, argv, "e:f:t:c:d:rSVhv", long_options,
 			  &option_index)) != -1) {
 		switch (c) {
+			// TODO parse io-timeout
 		case 'v':
 			print_version();
 			do_exit(0);
@@ -462,6 +477,48 @@ void args_init(int argc, char* argv[])
 	  args.rows_only, args.verbose, args.silent);
 }
 
+int loop_create()
+{
+	int ret;
+
+	if ((loop = calloc(1, sizeof(uv_loop_t))) == NULL) {
+		errno = ENOMEM;
+		goto error;
+	}
+
+	if ((ret = uv_loop_init(loop)) < 0) {
+		fprintf(stderr, "%s: %s\n", uv_err_name(ret), uv_strerror(ret));
+		goto error;
+	}
+
+	debug_printf("initialized event loop %p", loop);
+	return 0;
+
+error:
+	if (loop) {
+		free(loop);
+		loop = NULL;
+	}
+	return 1;
+}
+
+struct sonic_client* client_create(
+  uv_loop_t* loop, struct config_s* cli_config)
+{
+	struct sonic_config cfg = {0};
+	struct sonic_client* c;
+
+	cfg.io_timeout = cli_config->io_timeout;
+	cfg.websocket_timeout = cli_config->websocket_timeout;
+
+	if ((c = sonic_client_create(loop, &cfg)) == NULL) {
+		perror("sonic_client_create");
+		return NULL;
+	}
+
+	return c;
+}
+
 int main(int argc, char* argv[])
 {
 	args_init(argc, argv);
@@ -470,8 +527,10 @@ int main(int argc, char* argv[])
 		goto exit;
 	}
 
-	if ((query_buf = buf_create(BUF_INIT_CAP)) == NULL)
+	if ((query_buf = buf_create(BUF_INIT_CAP)) == NULL) {
+		pret = 1;
 		goto exit;
+	}
 
 	if (args.file &&
 	  (query = query_file_init(args.file, args.define, query_buf)) == NULL) {
@@ -486,7 +545,24 @@ int main(int argc, char* argv[])
 		goto exit;
 	}
 
+	if ((pret = loop_create()) != 0) {
+		perror("loop_create");
+		goto exit;
+	}
+
+	if ((client = client_create(loop, config)) == NULL) {
+		pret = 1;
+		goto exit;
+	}
+
+	// TODO sonic_client_submit(query_ctx);
+
 	debug_printf("running query:\n----------\n%s\n----------\n", query);
+
+	while (uv_run(loop, UV_RUN_DEFAULT))
+		;
+
+	debug_printf("uv loop exit; uv_loop_alive: %d\n", uv_loop_alive(loop));
 
 exit:
 	all_free();
