@@ -281,7 +281,6 @@ AC_SUBST(SONIC_VERSION, ["$version"])
 
 AC_CONFIG_FILES([Makefile
 				 src/Makefile
-				 test/helper.sh
 				 deps/Makefile
                  test/Makefile])
 
