@@ -11,6 +11,8 @@
 #include <slab/rcmalloc.h>
 #include <slab/slab.h>
 
+#include "../src/message.h"
+
 typedef struct test_ctx_s {
 	char* test_expr;
 	int failure;

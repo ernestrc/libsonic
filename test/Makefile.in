@@ -9,7 +9,7 @@ BINDIR = $(ROOT_DIR)/bin
 LIBDIR=$(ROOT_DIR)/lib
 SRCDIR=$(ROOT_DIR)/src
 
-COVERAGE_SRC_OBJ=$(SRCDIR)/message.o
+COVERAGE_SRC_OBJ=$(SRCDIR)/message.o $(SRCDIR)/util.o
 COVERAGE_OBJ=$(addprefix -object , $(COVERAGE_SRC_OBJ))
 TESTS=$(filter-out $(SKIP_C_TESTS), $(wildcard test_*.c))
 INT_TESTS=$(filter-out $(SKIP_INT_TESTS), $(wildcard test_*.sh))
