@@ -4,12 +4,21 @@
 #include <json-c/json.h>
 #include <stdio.h>
 
-#define UPDATE_SNPRINTF_WANT(want, buf, blen, res)                             \
-	blen -= want;                                                              \
-	if (blen < 0) {                                                            \
-		blen = 0;                                                              \
+#include "config.h"
+
+#ifdef SONIC_DEBUG
+#define DEBUG_LOG(...) fprintf(stderr, __VA_ARGS__);
+#else
+#define DEBUG_LOG(...)
+#endif
+
+/* note that dst_len must be a signed integer/long*/
+#define UPDATE_SNPRINTF_WANT(want, dst, dst_len, res)                          \
+	if (dst_len >= want) {                                                     \
+		dst_len -= want;                                                       \
+		dst += want;                                                           \
 	} else {                                                                   \
-		buf += want;                                                           \
+		dst_len = 0;                                                           \
 	}                                                                          \
 	res += want;
 

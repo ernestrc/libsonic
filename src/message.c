@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,26 +18,30 @@ void sonic_message_init_ack(struct sonic_message* sm)
 	sm->type = SONIC_TYPE_ACK;
 }
 
-void sonic_message_init_started(struct sonic_message* sm, const char* msg)
+void sonic_message_init_started(struct sonic_message* sm)
 {
 	RESET_MSG(sm);
-
 	sm->type = SONIC_TYPE_STARTED;
-	sm->message.started.msg = msg;
 }
 
-void sonic_message_init_query(struct sonic_message* sm, const char* query)
+void sonic_message_init_query(struct sonic_message* sm, const char* query,
+  const char* auth, const json_object* config)
 {
 	RESET_MSG(sm);
+	assert(query != NULL);
+	assert(config != NULL);
 
 	sm->type = SONIC_TYPE_QUERY;
 	sm->message.query.query = query;
+	sm->message.query.auth = auth;
+	sm->message.query.config = config;
 }
 
 void sonic_message_init_auth(
-  struct sonic_message* sm, const char* user, const char* key)
+  struct sonic_message* sm, const char* key, const char* user)
 {
 	RESET_MSG(sm);
+	assert(key != NULL);
 
 	sm->type = SONIC_TYPE_AUTH;
 	sm->message.auth.user = user;
@@ -48,13 +53,19 @@ void sonic_message_init_metadata(
 {
 	RESET_MSG(sm);
 
+	struct sonic_message_metadata* tmp = (struct sonic_message_metadata*)meta;
+	while (tmp != NULL) {
+		assert(tmp->name != NULL);
+		assert(tmp->type != NULL);
+		tmp = tmp->next;
+	}
+
 	sm->type = SONIC_TYPE_METADATA;
-	// FIXME empty metadata is encoded as NULL meta so this breaks
-	sm->message.metadata = *meta;
+	sm->message.metadata = meta;
 }
 
 void sonic_message_init_progress(struct sonic_message* sm,
-  enum sonic_status status, int progress, int total, const char* units)
+  enum sonic_status status, double progress, double total, const char* units)
 {
 	RESET_MSG(sm);
 
@@ -71,8 +82,7 @@ void sonic_message_init_output(
 	RESET_MSG(sm);
 
 	sm->type = SONIC_TYPE_OUTPUT;
-	// FIXME empty output is encoded as NULL meta so this breaks
-	sm->message.output = *output;
+	sm->message.output = output;
 }
 
 void sonic_message_init_completed(struct sonic_message* sm)
@@ -82,16 +92,35 @@ void sonic_message_init_completed(struct sonic_message* sm)
 	sm->type = SONIC_TYPE_COMPLETED;
 }
 
-// TODO rest of fields config and auth
 INLINE static int sonic_message_decode_query(
   struct sonic_message* dst, json_object* vval, json_object* pval)
 {
-	const char* query = json_object_get_string(vval);
-	if (query == NULL) {
+	const char *query, *auth;
+	const json_object *config, *jauth;
+
+	if ((query = json_object_get_string(vval)) == NULL) {
+		DEBUG_LOG("invalid sonic query: query is null %p, %p\n", vval, query);
 		errno = EINVAL;
 		return 1;
 	}
-	sonic_message_init_query(dst, query);
+	if ((config = json_object_object_get(pval, "config")) == NULL) {
+		DEBUG_LOG("invalid sonic query: 'config' not found in payload\n");
+		errno = EINVAL;
+		return 1;
+	}
+	jauth = json_object_object_get(pval, "auth");
+	if (jauth != NULL) {
+		if (json_object_get_type(jauth) != json_type_string) {
+			DEBUG_LOG("invalid sonic query: 'auth' is %d\n",
+			  json_object_get_type(jauth));
+			errno = EINVAL;
+			return 1;
+		}
+		auth = json_object_get_string((json_object*)jauth);
+	} else {
+		auth = NULL;
+	}
+	sonic_message_init_query(dst, query, auth, config);
 	return 0;
 }
 
@@ -102,6 +131,7 @@ INLINE static int sonic_message_decode_auth(
 	const char* user = NULL;
 	const char* key = json_object_get_string(vval);
 	if (key == NULL) {
+		DEBUG_LOG("invalid sonic auth message: key is null\n");
 		errno = EINVAL;
 		return 1;
 	}
@@ -114,11 +144,14 @@ INLINE static int sonic_message_decode_auth(
 		case json_type_null:
 			break;
 		default:
+			DEBUG_LOG("invalid sonic auth message: user is neither a string "
+					  "nor a null: %d\n",
+			  json_object_get_type(juser));
 			errno = EINVAL;
 			return 1;
 		}
 	}
-	sonic_message_init_auth(dst, user, key);
+	sonic_message_init_auth(dst, key, user);
 	return 0;
 }
 
@@ -128,10 +161,12 @@ INLINE static int sonic_message_decode_progress(
 	json_object *jstatus, *jprogress, *jtotal, *junits;
 	enum json_type jstatus_type, jprogress_type, jtotal_type, junits_type;
 	enum sonic_status status;
-	int progress, total;
+	double progress, total;
 	const char* units = NULL;
 
-	if (json_object_get_type(pval) == json_type_null) {
+	if (json_object_get_type(pval) != json_type_object) {
+		DEBUG_LOG("invalid sonic progress message: payload is %d\n",
+		  json_object_get_type(pval));
 		errno = EINVAL;
 		return 1;
 	}
@@ -149,18 +184,33 @@ INLINE static int sonic_message_decode_progress(
 	jtotal_type = json_object_get_type(jtotal);
 
 	if ((jstatus_type != json_type_int && jstatus_type != json_type_double) ||
-	  (jprogress_type != json_type_int && jprogress_type != json_type_double) ||
-	  (jtotal_type != json_type_int && jtotal_type != json_type_double)) {
+	  (jprogress_type != json_type_int && jprogress_type != json_type_double)) {
+		DEBUG_LOG(
+		  "invalid sonic progress message: status is %d; progress is %d\n",
+		  jstatus_type, jprogress_type);
 		errno = EINVAL;
 		return 1;
 	}
 
+	if (jtotal_type != json_type_null) {
+		if (jtotal_type != json_type_int && jtotal_type != json_type_double) {
+			DEBUG_LOG(
+			  "invalid sonic progress message: total is %d\n", jtotal_type);
+			errno = EINVAL;
+			return 1;
+		}
+		total = json_object_get_double(jtotal);
+	} else {
+		total = 0;
+	}
+
 	status = json_object_get_int(jstatus);
 	progress = json_object_get_double(jprogress);
-	total = json_object_get_double(jtotal);
 
 	if (junits_type != json_type_null) {
 		if (junits_type != json_type_string) {
+			DEBUG_LOG(
+			  "invalid sonic progress message: units is %d\n", junits_type);
 			errno = EINVAL;
 			return 1;
 		}
@@ -178,6 +228,8 @@ INLINE static int sonic_message_decode_metadata(
 	struct sonic_message_metadata* meta;
 
 	if (json_object_get_type(pval) != json_type_array) {
+		DEBUG_LOG("invalid sonic metadata: payload is %d\n",
+		  json_object_get_type(pval));
 		errno = EINVAL;
 		return 1;
 	}
@@ -200,6 +252,8 @@ INLINE static int sonic_message_decode_metadata(
 #define GET_NEXT_META()                                                        \
 	obj = json_object_array_get_idx(pval, i);                                  \
 	if (json_object_get_type(obj) != json_type_object) {                       \
+		DEBUG_LOG("invalid sonic metadata: entity at index %d is %d\n", i,     \
+		  json_object_get_type(obj));                                          \
 		errno = EINVAL;                                                        \
 		return 1;                                                              \
 	}                                                                          \
@@ -207,6 +261,9 @@ INLINE static int sonic_message_decode_metadata(
 	{                                                                          \
 		tmp->name = iter.key;                                                  \
 		if (json_object_get_type(iter.val) != json_type_string) {              \
+			DEBUG_LOG("invalid sonic metadata: object at index %d has value "  \
+					  "of type %d\n",                                          \
+			  i, json_object_get_type(iter.val));                              \
 			errno = EINVAL;                                                    \
 			return 1;                                                          \
 		}                                                                      \
@@ -215,9 +272,10 @@ INLINE static int sonic_message_decode_metadata(
 		break;                                                                 \
 	}
 
-	for (; i < len - 1; i++, tmp++) {
+	for (; i < len - 1; i++) {
 		GET_NEXT_META();
-		tmp->next = tmp;
+		tmp->next = tmp + 1;
+		tmp = tmp->next;
 	}
 	GET_NEXT_META();
 	tmp->next = NULL;
@@ -234,6 +292,8 @@ INLINE static int sonic_message_decode_output(
 	struct sonic_message_output* out;
 
 	if (json_object_get_type(pval) != json_type_array) {
+		DEBUG_LOG(
+		  "invalid sonic output: payload is %d\n", json_object_get_type(pval));
 		errno = EINVAL;
 		return 1;
 	}
@@ -251,9 +311,10 @@ INLINE static int sonic_message_decode_output(
 	// extract values and link linked list
 	int i = 0;
 	struct sonic_message_output* tmp = out;
-	for (; i < len - 1; i++, tmp++) {
+	for (; i < len - 1; i++) {
 		tmp->value = json_object_array_get_idx(pval, i);
-		tmp->next = tmp;
+		tmp->next = tmp + 1;
+		tmp = tmp->next;
 	}
 	tmp->value = json_object_array_get_idx(pval, i);
 	tmp->next = NULL;
@@ -277,7 +338,7 @@ int sonic_message_decode(
 	}
 
 	if ((json = json_tokener_parse_ex(tokener, src, src_len)) == NULL) {
-		fprintf(stderr, "json_tokener_parse_ex: error: %d\n",
+		DEBUG_LOG("json_tokener_parse_ex: error: %d\n",
 		  json_tokener_get_error(tokener));
 		errno = EINVAL;
 		ret = 1;
@@ -286,7 +347,7 @@ int sonic_message_decode(
 
 	json_object* type = json_object_object_get(json, "e");
 	if (json_object_get_type(type) != json_type_string) {
-		fprintf(stderr, "invalid sonic message: 'e' is of type %d\n",
+		DEBUG_LOG("invalid sonic message: 'e' is of type %d\n",
 		  json_object_get_type(type));
 		errno = EINVAL;
 		ret = 1;
@@ -296,7 +357,7 @@ int sonic_message_decode(
 	json_object* v = json_object_object_get(json, "v");
 	enum json_type vt = json_object_get_type(v);
 	if (vt != json_type_string && vt != json_type_null) {
-		fprintf(stderr, "invalid sonic message: 'v' is of type %d\n", vt);
+		DEBUG_LOG("invalid sonic message: 'v' is of type %d\n", vt);
 		errno = EINVAL;
 		ret = 1;
 		goto exit;
@@ -310,7 +371,7 @@ int sonic_message_decode(
 		ret = 0;
 		break;
 	case SONIC_TYPE_STARTED:
-		sonic_message_init_started(dst, NULL);
+		sonic_message_init_started(dst);
 		ret = 0;
 		break;
 	case SONIC_TYPE_QUERY:
@@ -333,17 +394,19 @@ int sonic_message_decode(
 		ret = 0;
 		break;
 	default:
+		DEBUG_LOG("invalid sonic message: unexpected type: %d\n",
+		  *json_object_get_string(type));
 		errno = EINVAL;
 		ret = 1;
 	}
 
 exit:
+	lerrno = errno;
 	if (ret) {
 		json_object_put(json);
 	} else {
 		dst->backing = json;
 	}
-	lerrno = errno;
 	if (tokener)
 		json_tokener_reset(tokener);
 	errno = lerrno;
@@ -359,14 +422,19 @@ void sonic_message_deinit(struct sonic_message* msg)
 INLINE static int sonic_message_cmp_query(
   struct sonic_message* a, struct sonic_message* b)
 {
-	return strcmp(a->message.query.query, b->message.query.query);
+	return strcmp(a->message.query.query, b->message.query.query) ||
+	  !json_object_equal((json_object*)a->message.query.config,
+		(json_object*)b->message.query.config) ||
+	  (a->message.query.auth != b->message.query.auth &&
+		strcmp(a->message.query.auth, b->message.query.auth));
 }
 
 INLINE static int sonic_message_cmp_auth(
   struct sonic_message* a, struct sonic_message* b)
 {
-	return strcmp(a->message.auth.user, b->message.auth.user) ||
-	  strcmp(a->message.auth.key, b->message.auth.key);
+	return strcmp(a->message.auth.key, b->message.auth.key) ||
+	  (a->message.auth.user != b->message.auth.user &&
+		strcmp(a->message.auth.user, b->message.auth.user));
 }
 
 INLINE static int sonic_message_cmp_progress(
@@ -375,7 +443,8 @@ INLINE static int sonic_message_cmp_progress(
 	return intcmp(a->message.progress.status, b->message.progress.status) ||
 	  intcmp(a->message.progress.progress, b->message.progress.progress) ||
 	  intcmp(a->message.progress.total, b->message.progress.total) ||
-	  strcmp(a->message.progress.units, b->message.progress.units);
+	  (a->message.progress.units != b->message.progress.units &&
+		strcmp(a->message.progress.units, b->message.progress.units));
 }
 
 INLINE static int sonic_message_cmp_metadata(
@@ -383,8 +452,8 @@ INLINE static int sonic_message_cmp_metadata(
 {
 	int ret = 0;
 
-	struct sonic_message_metadata *ameta, *bmeta;
-	for (ameta = &a->message.metadata, bmeta = &b->message.metadata;
+	const struct sonic_message_metadata *ameta, *bmeta;
+	for (ameta = a->message.metadata, bmeta = b->message.metadata;
 		 ameta != NULL && bmeta != NULL && ret == 0;
 		 ameta = ameta->next, bmeta = bmeta->next) {
 		ret =
@@ -399,8 +468,8 @@ INLINE static int sonic_message_cmp_output(
 {
 	int ret = 0;
 
-	struct sonic_message_output *aout, *bout;
-	for (aout = &a->message.output, bout = &b->message.output;
+	const struct sonic_message_output *aout, *bout;
+	for (aout = a->message.output, bout = b->message.output;
 		 aout != NULL && bout != NULL && ret == 0;
 		 aout = aout->next, bout = bout->next) {
 		ret = !json_object_equal(
@@ -434,11 +503,152 @@ int sonic_message_cmp(struct sonic_message* a, struct sonic_message* b)
 		/* fallthrough */
 	case SONIC_TYPE_ACK:
 		return 0;
+	default:
+		abort();
 	}
 }
 
-int sonic_message_encode(
+INLINE static size_t sonic_message_encode_metadata(
+  char* dst, size_t dst_len, const struct sonic_message_metadata* meta)
+{
+	size_t res = 0;
+	size_t want = 0;
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "{\"e\":\"T\",\"p\":[");
+
+	if (meta == NULL)
+		goto exit;
+
+	SNPRINTF_WANT(
+	  dst, dst_len, want, res, "{\"%s\":\"%s\"}", meta->name, meta->type);
+
+	for (meta = meta->next; meta != NULL; meta = meta->next) {
+		SNPRINTF_WANT(
+		  dst, dst_len, want, res, ",{\"%s\":\"%s\"}", meta->name, meta->type);
+	}
+
+exit:
+	SNPRINTF_WANT(dst, dst_len, want, res, "]}");
+
+	return res;
+}
+
+INLINE static size_t sonic_message_encode_output(
+  char* dst, size_t dst_len, const struct sonic_message_output* out)
+{
+	size_t res = 0;
+	size_t want = 0;
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "{\"e\":\"O\",\"p\":[");
+
+	if (out == NULL)
+		goto exit;
+
+	want = snprintj(dst, dst_len, out->value);
+	UPDATE_SNPRINTF_WANT(want, dst, dst_len, res);
+
+	for (out = out->next; out != NULL; out = out->next) {
+		SNPRINTF_WANT(dst, dst_len, want, res, ",");
+		want = snprintj(dst, dst_len, out->value);
+		UPDATE_SNPRINTF_WANT(want, dst, dst_len, res);
+	}
+
+exit:
+	SNPRINTF_WANT(dst, dst_len, want, res, "]}");
+
+	return res;
+}
+
+INLINE static size_t sonic_message_encode_progress(char* dst, size_t dst_len,
+  enum sonic_status status, double progress, double total, const char* units)
+{
+	size_t res = 0;
+	size_t want = 0;
+
+	SNPRINTF_WANT(dst, dst_len, want, res,
+	  "{\"e\":\"P\",\"p\":{\"p\":%g,\"s\":%d", progress, status);
+
+	if (total != 0) {
+		SNPRINTF_WANT(dst, dst_len, want, res, ",\"t\":%g", total);
+	}
+
+	if (units != NULL) {
+		SNPRINTF_WANT(dst, dst_len, want, res, ",\"u\":\"%s\"", units);
+	}
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "}}");
+
+	return res;
+}
+
+INLINE static size_t sonic_message_encode_auth(
+  char* dst, size_t dst_len, const char* key, const char* user)
+{
+	size_t res = 0;
+	size_t want = 0;
+	assert(key != NULL);
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "{\"e\":\"H\",\"v\":\"%s\"", key);
+
+	if (user != NULL) {
+		SNPRINTF_WANT(
+		  dst, dst_len, want, res, ",\"p\":{\"user\":\"%s\"}", user);
+	}
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "}");
+
+	return res;
+}
+
+INLINE static size_t sonic_message_encode_query(char* dst, size_t dst_len,
+  const char* query, const char* auth, const json_object* config)
+{
+	size_t res = 0;
+	size_t want = 0;
+	assert(config != NULL);
+
+	SNPRINTF_WANT(dst, dst_len, want, res,
+	  "{\"e\":\"Q\",\"v\":\"%s\",\"p\":{\"config\":", query);
+
+	want = snprintj(dst, dst_len, config);
+	UPDATE_SNPRINTF_WANT(want, dst, dst_len, res);
+
+	if (auth != NULL) {
+		SNPRINTF_WANT(dst, dst_len, want, res, ",\"auth\":\"%s\"", auth);
+	}
+
+	SNPRINTF_WANT(dst, dst_len, want, res, "}}");
+
+	return res;
+}
+
+size_t sonic_message_encode(
   char* dst, size_t dst_len, const struct sonic_message* src)
 {
-	abort();
+	switch (src->type) {
+	case SONIC_TYPE_ACK:
+		return snprintf(dst, dst_len, "{\"e\":\"A\"}");
+	case SONIC_TYPE_STARTED:
+		return snprintf(dst, dst_len, "{\"e\":\"S\"}");
+	case SONIC_TYPE_COMPLETED:
+		return snprintf(dst, dst_len, "{\"e\":\"D\"}");
+	case SONIC_TYPE_QUERY:
+		return sonic_message_encode_query(dst, dst_len,
+		  src->message.query.query, src->message.query.auth,
+		  src->message.query.config);
+	case SONIC_TYPE_AUTH:
+		return sonic_message_encode_auth(
+		  dst, dst_len, src->message.auth.key, src->message.auth.user);
+	case SONIC_TYPE_PROGRESS:
+		return sonic_message_encode_progress(dst, dst_len,
+		  src->message.progress.status, src->message.progress.progress,
+		  src->message.progress.total, src->message.progress.units);
+	case SONIC_TYPE_METADATA:
+		return sonic_message_encode_metadata(
+		  dst, dst_len, src->message.metadata);
+	case SONIC_TYPE_OUTPUT:
+		return sonic_message_encode_output(dst, dst_len, src->message.output);
+	default:
+		abort();
+	}
 }

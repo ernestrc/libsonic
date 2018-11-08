@@ -40,33 +40,37 @@ typedef struct test_ctx_s {
 
 #define PRINT_PERROR(a, b) perror(#a);
 
+#define PRINT_STR_ERROR(a, b)                                                  \
+	fprintf(stderr, STRING_ERROR " '%s' vs '%s' \n", __FILE__, __FUNCTION__,   \
+	  __LINE__, a, b);
+
+#define PRINT_INT_ERROR(a, b)                                                  \
+	fprintf(stderr, STRING_ERROR " %ld vs %ld \n", __FILE__, __FUNCTION__,     \
+	  __LINE__, a, b);
+
 #define PRINT_ERR_MSG_CMP(a, b)                                                \
 	{                                                                          \
 		fprintf(stderr, STRING_ERROR, __FILE__, __FUNCTION__, __LINE__);       \
 		if ((a) == NULL) {                                                     \
 			fprintf(stderr, "(null)");                                         \
-		} else if ((a) != NULL && (a)->backing != NULL) {                      \
-			int __need = snprintj(NULL, 0, (a)->backing);                      \
+		} else {                                                               \
+			size_t __need = sonic_message_encode(NULL, 0, (a));                \
 			char* __buf = malloc(__need + 1);                                  \
 			assert(__buf != NULL);                                             \
-			snprintj(__buf, __need + 1, (b)->backing);                         \
+			sonic_message_encode(__buf, __need + 1, (a));                      \
 			fprintf(stderr, "%s", __buf);                                      \
 			free(__buf);                                                       \
-		} else {                                                               \
-			fprintf(stderr, "(print not available)");                          \
 		}                                                                      \
 		fprintf(stderr, " <<<< vs >>>> ");                                     \
 		if ((b) == NULL) {                                                     \
 			fprintf(stderr, "(null)");                                         \
-		} else if ((b) != NULL && (b)->backing != NULL) {                      \
-			int __need = snprintj(NULL, 0, (b)->backing);                      \
+		} else {                                                               \
+			size_t __need = sonic_message_encode(NULL, 0, (b));                \
 			char* __buf = malloc(__need + 1);                                  \
 			assert(__buf != NULL);                                             \
-			snprintj(__buf, __need + 1, (b)->backing);                         \
+			sonic_message_encode(__buf, __need + 1, (b));                      \
 			fprintf(stderr, "%s", __buf);                                      \
 			free(__buf);                                                       \
-		} else {                                                               \
-			fprintf(stderr, "(print not available)");                          \
 		}                                                                      \
 		fprintf(stderr, "\n");                                                 \
 	}
@@ -98,10 +102,12 @@ typedef struct test_ctx_s {
 #define ASSERT_MEM_EQ(a, b, l) ASSERT_COND3(a, b, l, COND_MEM_EQ)
 #define ASSERT_MSG_EQ(a, b)                                                    \
 	ASSERT_COND2_PRINT(a, b, COND_MSG_EQ, PRINT_ERR_MSG_CMP)
-#define ASSERT_STR_EQ(a, b) ASSERT_COND2(a, b, COND_STR_EQ)
+#define ASSERT_STR_EQ(a, b)                                                    \
+	ASSERT_COND2_PRINT(a, b, COND_STR_EQ, PRINT_STR_ERROR)
 #define ASSERT_NEQ(a, b) ASSERT_COND2(a, b, COND_NEQ)
 #define ASSERT_EQ(a, b) ASSERT_COND2(a, b, COND_EQ)
 #define ASSERT_RET_PERROR(fn) ASSERT_COND2_PRINT((fn), 0, COND_EQ, PRINT_PERROR)
+#define ASSERT_INT_EQ(a, b) ASSERT_COND2_PRINT(a, b, COND_EQ, PRINT_INT_ERROR)
 #define ASSERT_TRUE(a) ASSERT_COND1(a, COND_TRUE)
 #define ASSERT_FALSE(a) ASSERT_COND1(a, COND_FALSE)
 #define ASSERT_NULL(a) ASSERT_COND2(a, NULL, COND_EQ)

@@ -60,7 +60,6 @@ INLINE static int snprintj_string(
 
 int snprintj(char* dst, int dst_len, const json_object* j)
 {
-
 	switch (json_object_get_type(j)) {
 	case json_type_null:
 		return snprintf(dst, dst_len, "null");
@@ -68,6 +67,7 @@ int snprintj(char* dst, int dst_len, const json_object* j)
 		return json_object_get_boolean(j) ? snprintf(dst, dst_len, "true") :
 											snprintf(dst, dst_len, "false");
 	case json_type_double:
+		// FIXME should be %g
 		return snprintf(dst, dst_len, "%.4f", json_object_get_double(j));
 	case json_type_int:
 		return snprintf(dst, dst_len, "%ld", json_object_get_int64(j));
