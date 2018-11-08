@@ -71,6 +71,7 @@ struct sonic_message {
 		struct sonic_message_output output;
 		struct sonic_message_completed completed;
 	} message;
+	json_object* backing;
 };
 
 void sonic_message_init_ack(struct sonic_message* sm);
@@ -95,6 +96,10 @@ void sonic_message_init_completed(struct sonic_message* sm);
 
 int sonic_message_decode(
   struct sonic_message* dst, const char* src, size_t src_len);
+
+void sonic_message_deinit(struct sonic_message* msg);
+
+int sonic_message_cmp(struct sonic_message* a, struct sonic_message* b);
 
 int sonic_message_encode(
   char* dst, size_t dst_len, const struct sonic_message* src);

@@ -3,6 +3,9 @@
 #ifndef TEST_TEST_H_
 #define TEST_TEST_H_
 
+#include <assert.h>
+#include <errno.h>
+#include <error.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +15,7 @@
 #include <slab/slab.h>
 
 #include "../src/message.h"
+#include "../src/util.h"
 
 typedef struct test_ctx_s {
 	char* test_expr;
@@ -23,6 +27,7 @@ typedef struct test_ctx_s {
 #define COND_EQ(a, b) ((a) == (b))
 #define COND_NEQ(a, b) (!COND_EQ(a, b))
 #define COND_MEM_EQ(a, b, l) (memcmp((a), (b), (l)) == 0)
+#define COND_MSG_EQ(a, b) (sonic_message_cmp((a), (b)) == 0)
 #define COND_STR_EQ(a, b) (strcmp((a), (b)) == 0)
 #define COND_TRUE(a) COND_EQ(!!a, 1)
 #define COND_FALSE(a) COND_EQ(!a, 1)
@@ -32,6 +37,39 @@ typedef struct test_ctx_s {
 #define PRINT_ERR(a, b, COND)                                                  \
 	fprintf(stderr, STRING_ERROR #a " " #COND " " #b "\n", __FILE__,           \
 	  __FUNCTION__, __LINE__);
+
+#define PRINT_PERROR(a, b) perror(#a);
+
+#define PRINT_ERR_MSG_CMP(a, b)                                                \
+	{                                                                          \
+		fprintf(stderr, STRING_ERROR, __FILE__, __FUNCTION__, __LINE__);       \
+		if ((a) == NULL) {                                                     \
+			fprintf(stderr, "(null)");                                         \
+		} else if ((a) != NULL && (a)->backing != NULL) {                      \
+			int __need = snprintj(NULL, 0, (a)->backing);                      \
+			char* __buf = malloc(__need + 1);                                  \
+			assert(__buf != NULL);                                             \
+			snprintj(__buf, __need + 1, (b)->backing);                         \
+			fprintf(stderr, "%s", __buf);                                      \
+			free(__buf);                                                       \
+		} else {                                                               \
+			fprintf(stderr, "(print not available)");                          \
+		}                                                                      \
+		fprintf(stderr, " <<<< vs >>>> ");                                     \
+		if ((b) == NULL) {                                                     \
+			fprintf(stderr, "(null)");                                         \
+		} else if ((b) != NULL && (b)->backing != NULL) {                      \
+			int __need = snprintj(NULL, 0, (b)->backing);                      \
+			char* __buf = malloc(__need + 1);                                  \
+			assert(__buf != NULL);                                             \
+			snprintj(__buf, __need + 1, (b)->backing);                         \
+			fprintf(stderr, "%s", __buf);                                      \
+			free(__buf);                                                       \
+		} else {                                                               \
+			fprintf(stderr, "(print not available)");                          \
+		}                                                                      \
+		fprintf(stderr, "\n");                                                 \
+	}
 
 #define ASSERT_COND1(a, COND)                                                  \
 	if (!COND(a)) {                                                            \
@@ -51,20 +89,26 @@ typedef struct test_ctx_s {
 		return EXIT_FAILURE;                                                   \
 	}
 
+#define ASSERT_COND2_PRINT(a, b, COND, PRINT_ERROR)                            \
+	if (!COND((a), (b))) {                                                     \
+		PRINT_ERROR((a), (b));                                                 \
+		return EXIT_FAILURE;                                                   \
+	}
+
 #define ASSERT_MEM_EQ(a, b, l) ASSERT_COND3(a, b, l, COND_MEM_EQ)
+#define ASSERT_MSG_EQ(a, b)                                                    \
+	ASSERT_COND2_PRINT(a, b, COND_MSG_EQ, PRINT_ERR_MSG_CMP)
 #define ASSERT_STR_EQ(a, b) ASSERT_COND2(a, b, COND_STR_EQ)
 #define ASSERT_NEQ(a, b) ASSERT_COND2(a, b, COND_NEQ)
 #define ASSERT_EQ(a, b) ASSERT_COND2(a, b, COND_EQ)
+#define ASSERT_RET_PERROR(fn) ASSERT_COND2_PRINT((fn), 0, COND_EQ, PRINT_PERROR)
 #define ASSERT_TRUE(a) ASSERT_COND1(a, COND_TRUE)
 #define ASSERT_FALSE(a) ASSERT_COND1(a, COND_FALSE)
 #define ASSERT_NULL(a) ASSERT_COND2(a, NULL, COND_EQ)
 
 static slab_t* test_slab;
 
-void init_test_data()
-{
-
-}
+void init_test_data() {}
 
 static void __test_print_help(const char* prog)
 {

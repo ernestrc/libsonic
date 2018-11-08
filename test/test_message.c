@@ -42,6 +42,29 @@ void* init_test_output(int n)
 	return out;
 }
 
+int test_message_decode()
+{
+	const int n = 1;
+	struct {
+		char* input;
+		struct sonic_message output;
+		struct sonic_message expected;
+	} cases[n];
+
+	cases[0].input = "{\"e\":\"Q\",\"p\":{\"config\":\"whatever\",\"auth\":"
+					 "null},\"v\":\"1234\"}";
+	sonic_message_init_query(&cases[0].expected, "1234");
+
+	for (int i = 0; i < n; i++) {
+		ASSERT_RET_PERROR(sonic_message_decode(
+		  &cases[i].output, cases[i].input, strlen(cases[i].input)));
+		ASSERT_MSG_EQ(&cases[i].expected, &cases[i].output);
+		sonic_message_deinit(&cases[i].output);
+	}
+
+	return 0;
+}
+
 int test_message_init()
 {
 	struct sonic_message msg;
@@ -138,6 +161,7 @@ int main(int argc, char* argv[])
 	TEST_INIT(ctx, argc, argv);
 
 	TEST_RUN(ctx, test_message_init);
+	TEST_RUN(ctx, test_message_decode);
 
 	TEST_RELEASE(ctx);
 }

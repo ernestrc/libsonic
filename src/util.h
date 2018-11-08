@@ -17,6 +17,8 @@
 	want = snprintf(dst, dst_len, tmpl, ##__VA_ARGS__);                        \
 	UPDATE_SNPRINTF_WANT(want, dst, dst_len, res);
 
+#define intcmp(a, b) ((a) < (b) ? -1 : ((a) > (b) ? 1 : 0))
+
 int snprintj(char* dst, int dst_len, const json_object* j);
 
 #endif
