@@ -27,7 +27,7 @@ else
 src: $(LIB) $(EXEC)
 endif
 
-%.o: %.c
+%.o: %.c %.h
 	$(CC) $(CFLAGS) -c $<
 
 $(LIB): $(OBJS)
