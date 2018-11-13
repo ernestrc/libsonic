@@ -1,5 +1,7 @@
-#include <json-c/json.h>
 #include <stdio.h>
+#include <string.h>
+
+#include <json-c/json.h>
 
 #include "cli_config.h"
 
@@ -47,6 +49,7 @@ error:
 static const char* config_parse(struct config_s* config, json_object* obj)
 {
 	json_object* url = NULL;
+	json_object* auth = NULL;
 	json_object* sources = NULL;
 	json_object* io_timeout = NULL;
 	json_object* websocket_timeout = NULL;
@@ -59,7 +62,6 @@ static const char* config_parse(struct config_s* config, json_object* obj)
 		return "config_parse: unexpected type for 'url' key in config file";
 	}
 	config->url = json_object_get_string(url);
-
 
 	if (json_object_object_get_ex(obj, "io_timeout", &io_timeout)) {
 		if (!json_object_is_type(io_timeout, json_type_int)) {
@@ -92,6 +94,17 @@ static const char* config_parse(struct config_s* config, json_object* obj)
 		return "config_parse: unexpected type for 'sources' key in config file";
 	}
 
+	if (json_object_object_get_ex(obj, "auth", &auth)) {
+		if (!json_object_is_type(auth, json_type_string)) {
+			return "config_parse: unexpected type for 'auth' key in "
+				   "config "
+				   "file";
+		}
+		config->auth = json_object_get_string(io_timeout);
+	} else {
+		config->auth = NULL;
+	}
+
 	return config_parse_sources(config, sources);
 }
 
@@ -108,7 +121,7 @@ int config_init(struct config_s* config, const char* cfg_file)
 	if ((config_err = config_parse(config, obj)) != NULL)
 		goto error;
 
-	config->origin = obj;
+	config->backing = obj;
 
 	return 0;
 
@@ -140,7 +153,7 @@ void config_free(struct config_s* config)
 {
 	if (config) {
 		config_free_sources(config);
-		json_object_put(config->origin);
+		json_object_put(config->backing);
 		free(config);
 	}
 }

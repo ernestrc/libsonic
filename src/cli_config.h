@@ -10,11 +10,12 @@ struct source_s {
 };
 
 struct config_s {
-	json_object* origin;
+	const char* auth;
 	const char* url;
 	int io_timeout;
 	int websocket_timeout;
 	struct source_s* sources;
+	json_object* backing;
 };
 
 int config_init(struct config_s* config, const char* cfg_file);
