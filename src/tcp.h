@@ -1,6 +1,8 @@
 #ifndef SONIC_TCP_H
 #define SONIC_TCP_H
 
+#include <h2o.h>
+#include <openssl/ssl.h>
 #include <uv.h>
 
 #include "message.h"
@@ -10,7 +12,7 @@ struct sonic_tcp_client {
 	uv_loop_t* loop;
 	SSL_CTX* ssl_ctx;
 	h2o_socketpool_t* sockpool;
-	h2o_multithread_receiver_t* getaddr_receiver;
+	struct sonic_tcp_ctx* reqs;
 	const char* host;
 };
 
@@ -18,7 +20,6 @@ struct sonic_tcp_config {
 	uv_loop_t* loop;
 	SSL_CTX* ssl_ctx;
 	h2o_socketpool_t* sockpool;
-	h2o_multithread_receiver_t* getaddr_receiver;
 	/* used for tls handshake */
 	const char* host;
 };
