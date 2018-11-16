@@ -1,15 +1,17 @@
 #ifndef SONIC_UTIL_H
 #define SONIC_UTIL_H
 
-#include <json-c/json.h>
+#include <netdb.h>
 #include <stdio.h>
+
+#include <json-c/json.h>
 
 #include "config.h"
 
 #ifdef SONIC_DEBUG
-#define DEBUG_LOG(...) fprintf(stderr, __VA_ARGS__);
+#define SONIC_LOG(...) fprintf(stderr, __VA_ARGS__);
 #else
-#define DEBUG_LOG(...)
+#define SONIC_LOG(...)
 #endif
 
 /* note that dst_len must be a signed integer/long*/
@@ -27,6 +29,15 @@
 	UPDATE_SNPRINTF_WANT(want, dst, dst_len, res);
 
 #define intcmp(a, b) ((a) < (b) ? -1 : ((a) > (b) ? 1 : 0))
+
+#define GET_CFG_INT(field, def, name)                                          \
+	if (cfg->field == 0) {                                                     \
+		cfg->field = def;                                                      \
+	} else if (cfg->field < 0) {                                               \
+		SONIC_LOG("invalid " name ": %d\n", cfg->field);                       \
+		errno = EINVAL;                                                        \
+		return 1;                                                              \
+	}
 
 int snprintj(char* dst, int dst_len, const json_object* j);
 

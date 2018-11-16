@@ -11,26 +11,27 @@
 #include <unistd.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
+#include <h2o.h>
 #include <pcre2.h>
 #include <slab/buf.h>
 #include <uv.h>
-#include <h2o.h>
 
 #include "cli_config.h"
 #include "client.h"
 #include "config.h"
+#include "util.h"
 
 #define BUF_INIT_CAP 1024 * 64
 
-#define debug_printf_chunk(tmpl, ...)                                          \
+#define debug_printf_chunk(...)                                                \
 	if (args.verbose) {                                                        \
-		printf((tmpl), __VA_ARGS__);                                           \
+		printf(__VA_ARGS__);                                                   \
 	}
 
-#define debug_printf(tmpl, ...)                                                \
+#define debug_printf(...)                                                      \
 	if (args.verbose) {                                                        \
 		printf("%lld: ", current_timestamp());                                 \
-		printf((tmpl), __VA_ARGS__);                                           \
+		printf(__VA_ARGS__);                                                   \
 	}
 
 #define do_exit(status)                                                        \
@@ -59,7 +60,10 @@ int pret;
 char* default_cfg_path;
 struct args_s args;
 struct config_s* config;
-char* query;
+char* query_str;
+struct sonic_message* query;
+struct sonic_stream_ctx* ctx;
+uv_signal_t sigint;
 buf_t* query_buf;
 uv_loop_t* loop;
 struct sonic_client* client;
@@ -121,15 +125,27 @@ void args_free()
 	free(default_cfg_path);
 }
 
+void client_free()
+{
+	sonic_client_free(client);
+	client = NULL;
+}
+
 void all_free()
 {
 	if (loop) {
 		uv_loop_close(loop);
 		free(loop);
 	}
-	if (query)
+	if (query) {
+		sonic_message_deinit(query);
 		free(query);
-	sonic_client_free(client);
+	}
+	if (query_str)
+		free(query_str);
+	if (ctx)
+		free(ctx);
+	client_free();
 	buf_free(query_buf);
 	config_free(config);
 	args_free();
@@ -477,6 +493,59 @@ void args_init(int argc, char* argv[])
 	  args.rows_only, args.verbose, args.silent);
 }
 
+void close_all(int status_code)
+{
+	SONIC_LOG("closing all libuv handles, handles: %d\n", loop->active_handles);
+
+	uv_signal_stop(&sigint);
+	client_free();
+	pret = status_code;
+}
+
+void shutdown_sig_h(uv_signal_t* handle, int signum)
+{
+	char* strsig = strsignal(signum);
+	int exit_code = signum + 128;
+	fprintf(stderr, "received signal %s\n", strsig);
+	close_all(exit_code);
+}
+
+void on_started(void* userdata)
+{
+	debug_printf("	void on_started(void* userdata)");
+}
+
+void on_progress(const struct sonic_message_progress* msg, void* userdata)
+{
+	debug_printf(
+	  "	void on_progress(const struct sonic_message_progress*, void* "
+	  "userdata)");
+}
+
+void on_metadata(const struct sonic_message_metadata* msg, void* userdata)
+{
+	debug_printf(
+	  "	void on_metadata(const struct sonic_message_metadata*, void* "
+	  "userdata)");
+}
+void on_data(const struct sonic_message_output* msg, void* userdata)
+{
+	debug_printf(
+	  "	void on_data(const struct sonic_message_output*, void* userdata)");
+}
+
+void on_error(const char* err, void* userdata)
+{
+	fprintf(stderr, "ERROR: %s\n", err);
+	close_all(1);
+}
+
+void on_complete(void* userdata)
+{
+	debug_printf("	void on_complete(void* userdata)");
+	close_all(0);
+}
+
 int loop_create()
 {
 	int ret;
@@ -502,21 +571,95 @@ error:
 	return 1;
 }
 
-struct sonic_client* client_create(
-  uv_loop_t* loop, struct config_s* cli_config)
+struct sonic_stream_ctx* ctx_create()
 {
-	struct sonic_config cfg = {0};
+	struct sonic_stream_ctx* res;
+
+	if ((res = calloc(1, sizeof(struct sonic_stream_ctx))) == NULL)
+		return NULL;
+
+	res->on_started = on_started;
+	res->on_progress = on_progress;
+	res->on_metadata = on_metadata;
+	res->on_data = on_data;
+	res->on_error = on_error;
+	res->on_complete = on_complete;
+	// TODO
+	res->userdata = NULL;
+
+	return res;
+}
+
+struct sonic_message* query_create(
+  char* query_str, const char* source, struct config_s* cli_config)
+{
+	struct sonic_message* query = NULL;
+	int lerrno;
+
+	if ((query = calloc(1, sizeof(struct sonic_message))) == NULL)
+		goto error;
+
+	struct source_s* source_config;
+	for (source_config = cli_config->sources; source_config != NULL;
+		 source_config = source_config->next) {
+		if (source_config->key == source)
+			break;
+	}
+
+	/* no local config; pass source for backend to resolve */
+	if (source_config == NULL) {
+		json_object* val = json_object_new_string(source);
+		sonic_message_init_query(query, query_str, cli_config->auth, val);
+		query->backing = val;
+	} else {
+		sonic_message_init_query(
+		  query, query_str, cli_config->auth, source_config->val);
+	}
+
+	return query;
+
+error:
+	lerrno = errno;
+	if (query)
+		free(query);
+	errno = lerrno;
+	return NULL;
+}
+
+struct sonic_client* client_create(uv_loop_t* loop, struct config_s* cli_config)
+{
+	struct sonic_config client_config = {0};
 	struct sonic_client* c;
 
-	cfg.io_timeout = cli_config->io_timeout;
-	cfg.websocket_timeout = cli_config->websocket_timeout;
+	client_config.url = cli_config->url;
+	client_config.io_timeout = cli_config->io_timeout;
+	client_config.pool_timeout = client_config.io_timeout * 2;
+	client_config.pool_capacity = 1;
+	// TODO client_config.websocket_timeout = cli_config->websocket_timeout;
 
-	if ((c = sonic_client_create(loop, &cfg)) == NULL) {
+	if ((c = sonic_client_create(loop, &client_config)) == NULL) {
 		perror("sonic_client_create");
 		return NULL;
 	}
 
 	return c;
+}
+
+int signals_init(uv_loop_t* loop)
+{
+	int ret;
+
+	if ((ret = uv_signal_init(loop, &sigint)) < 0)
+		goto error;
+
+	if ((ret = uv_signal_start(&sigint, shutdown_sig_h, SIGINT)) < 0)
+		goto error;
+
+	return 0;
+error:
+	fprintf(
+	  stderr, "uv_signal_init: %s: %s\n", uv_err_name(ret), uv_strerror(ret));
+	return ret;
 }
 
 int main(int argc, char* argv[])
@@ -533,12 +676,13 @@ int main(int argc, char* argv[])
 	}
 
 	if (args.file &&
-	  (query = query_file_init(args.file, args.define, query_buf)) == NULL) {
+	  (query_str = query_file_init(args.file, args.define, query_buf)) ==
+		NULL) {
 		perror("query_file_init");
 		pret = 1;
 		goto exit;
 	} else if (args.literal &&
-	  (query = query_literal_init(args.literal, args.define, query_buf)) ==
+	  (query_str = query_literal_init(args.literal, args.define, query_buf)) ==
 		NULL) {
 		perror("query_literal_init");
 		pret = 1;
@@ -550,14 +694,28 @@ int main(int argc, char* argv[])
 		goto exit;
 	}
 
+	if ((pret = signals_init(loop)) != 0)
+		goto exit;
+
 	if ((client = client_create(loop, config)) == NULL) {
 		pret = 1;
 		goto exit;
 	}
 
-	// TODO sonic_client_submit(query_ctx);
+	if ((query = query_create(query_str, args.source, config)) == NULL) {
+		pret = 1;
+		goto exit;
+	}
 
-	debug_printf("running query:\n----------\n%s\n----------\n", query);
+	if ((ctx = ctx_create()) == NULL) {
+		pret = 1;
+		goto exit;
+	}
+
+	if ((pret = sonic_client_send(client, query, ctx)) != 0)
+		goto exit;
+
+	debug_printf("running query:\n----------\n%s\n----------\n", query_str);
 
 	while (uv_run(loop, UV_RUN_DEFAULT))
 		;

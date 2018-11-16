@@ -16,13 +16,21 @@ struct sonic_client {
 		struct sonic_ws_client ws;
 		struct sonic_tcp_client tcp;
 	} client;
+	struct sonic_ws_config ws_cfg;
+	struct sonic_tcp_config tcp_cfg;
 	SSL_CTX* ssl_ctx;
+	h2o_socketpool_t sockpool;
+	h2o_timeout_t io_timeout;
+	uv_loop_t* loop;
+	uv_timer_t* close_dispatcher;
 };
 
 struct sonic_config {
+	SSL_CTX* ssl_ctx;
 	const char* url;
-	struct sonic_ws_config ws;
-	struct sonic_tcp_config tcp;
+	int pool_capacity;
+	int pool_timeout;
+	int io_timeout;
 };
 
 struct sonic_query_result {
@@ -43,13 +51,8 @@ typedef void (*sonic_stream_callback)(
 struct sonic_client* sonic_client_create(
   uv_loop_t* loop, struct sonic_config* cfg);
 
-int sonic_client_init(
-  struct sonic_client* c, uv_loop_t* loop, struct sonic_config* cfg);
-
-int sonic_client_query(struct sonic_client* c, struct sonic_query_ctx* ctx,
-  sonic_stream_callback* cb);
-
-void sonic_client_deinit(struct sonic_client* c);
+int sonic_client_send(struct sonic_client* c, struct sonic_message* cmd,
+  struct sonic_stream_ctx* ctx);
 
 void sonic_client_free(struct sonic_client* c);
 

@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <arpa/inet.h>
 
 #include "config.h"
 #include "util.h"
