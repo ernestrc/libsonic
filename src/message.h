@@ -34,8 +34,7 @@ struct sonic_message_auth {
 
 struct sonic_message_metadata {
 	const char* name;
-	// TODO should be an enum which also defines allowed types in output
-	const char* type;
+	enum json_type type;
 	struct sonic_message_metadata* next;
 };
 

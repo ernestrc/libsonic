@@ -15,7 +15,7 @@ void* init_test_metadata(int n)
 		meta->next = tmp;
 
 		meta->name = "name";
-		meta->type = "type";
+		meta->type = json_type_object;
 	}
 
 	return meta;
@@ -130,25 +130,25 @@ int test_message_serde()
 	sonic_message_init_metadata(&cases[12].de_expected, NULL);
 
 	cases[13].se_expected =
-	  "{\"e\":\"T\",\"p\":[{\"my_number\":\"int\"},{\"my_obj\":\"obj\"},{\"my_"
-	  "string\":\"string\"},{\"my_bool\":\"bool\"},{\"my_float\":\"float\"}]}";
+	  "{\"e\":\"T\",\"p\":[[\"my_number\",1],[\"my_obj\",{}],[\"my_"
+	  "string\",\"\"],[\"my_bool\",true],[\"my_float\",0.1]]}";
 	cases[13].se_output = malloc(strlen(cases[13].se_expected) + 1);
 #define META_LEN 5
 	struct sonic_message_metadata meta[META_LEN];
 	meta[0].name = "my_number";
-	meta[0].type = "int";
+	meta[0].type = json_type_int;
 	meta[0].next = &meta[1];
 	meta[1].name = "my_obj";
-	meta[1].type = "obj";
+	meta[1].type = json_type_object;
 	meta[1].next = &meta[2];
 	meta[2].name = "my_string";
-	meta[2].type = "string";
+	meta[2].type = json_type_string;
 	meta[2].next = &meta[3];
 	meta[3].name = "my_bool";
-	meta[3].type = "bool";
+	meta[3].type = json_type_boolean;
 	meta[3].next = &meta[4];
 	meta[4].name = "my_float";
-	meta[4].type = "float";
+	meta[4].type = json_type_double;
 	meta[4].next = NULL;
 	sonic_message_init_metadata(&cases[13].de_expected, meta);
 
