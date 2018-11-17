@@ -33,6 +33,28 @@ else
 test: int_test
 endif
 
+ifeq ($(DEVELOP_BUILD),yes)
+coverage: $(TESTPROFDATA)
+	llvm-cov report -instr-profile=$(TESTPROFDATA) $(COVERAGE_OBJ)
+
+html-coverage: $(TESTPROFDATA) BROWSER
+	llvm-cov show -format=html -instr-profile=$(TESTPROFDATA) $(COVERAGE_OBJ) > $(BINDIR)/coverage.html
+	@$(BROWSER) $(BINDIR)/coverage.html
+
+fuzz: $(TARGET_FUZZERS)
+	@ for f in $^; do mkdir -p $$f.corpus && LLVM_PROFILE_FILE="$$f.profraw" $$f $$f.corpus $(FUZZFLAGS); done; wait
+
+fuzz-coverage: $(FUZZPROFDATA)
+	llvm-cov report -instr-profile=$(FUZZPROFDATA) $(COVERAGE_OBJ)
+
+fuzz-html-coverage: $(FUZZPROFDATA) BROWSER
+	llvm-cov show -format=html -instr-profile=$(FUZZPROFDATA) $(COVERAGE_OBJ) > $(BINDIR)/fuzz-coverage.html
+	@$(BROWSER) $(BINDIR)/fuzz-coverage.html
+else
+coverage html-coverage fuzz fuzz-coverage fuzz-html-coverage:
+	@echo "ERROR: configure development build with 'configure --enable-develop' first" && exit 1
+endif
+
 unit_test: $(TARGET_TESTS)
 	@ set -e; for f in $^; do echo "  TEST	$$f" && LLVM_PROFILE_FILE="$$f.profraw" $$f --silent; done
 
@@ -45,29 +67,12 @@ $(BINDIR)/test_%: test_%.c $(LIB)
 $(TESTPROFDATA): int_test unit_test
 	llvm-profdata merge -sparse $(TARGET_TPROFILES) -o $(TESTPROFDATA)
 
-coverage: $(TESTPROFDATA)
-	llvm-cov report -instr-profile=$(TESTPROFDATA) $(COVERAGE_OBJ)
-
-html-coverage: $(TESTPROFDATA) BROWSER
-	llvm-cov show -format=html -instr-profile=$(TESTPROFDATA) $(COVERAGE_OBJ) > $(BINDIR)/coverage.html
-	@$(BROWSER) $(BINDIR)/coverage.html
-
-fuzz: $(TARGET_FUZZERS)
-	@ for f in $^; do mkdir -p $$f.corpus && LLVM_PROFILE_FILE="$$f.profraw" $$f $$f.corpus $(FUZZFLAGS); done; wait
-
 # clang version >= April 2017 required (tested with 6.0.0 trunk 310227)
 $(BINDIR)/fuzz_%: fuzz_%.c $(LIB)
 	$(CC) $(LDFLAGS) $(CFLAGS) -fsanitize=fuzzer $(addprefix ../src/,$(patsubst fuzz_%.c, %.c, $<)) $< -o $@ $(LIB)
 
 $(FUZZPROFDATA): $(TARGET_FUZZERS)
 	llvm-profdata merge -sparse $(TARGET_FPROFILES) -o $(FUZZPROFDATA)
-
-fuzz-coverage: $(FUZZPROFDATA)
-	llvm-cov report -instr-profile=$(FUZZPROFDATA) $(COVERAGE_OBJ)
-
-fuzz-html-coverage: $(FUZZPROFDATA) BROWSER
-	llvm-cov show -format=html -instr-profile=$(FUZZPROFDATA) $(COVERAGE_OBJ) > $(BINDIR)/fuzz-coverage.html
-	@$(BROWSER) $(BINDIR)/fuzz-coverage.html
 
 clean:
 	@rm -f $(TARGET_TESTS) $(TARGET_FUZZERS) $(FUZZPROFDATA) $(TESTPROFDATA) $(TARGET_TPROFILES) $(TARGET_FPROFILES)
