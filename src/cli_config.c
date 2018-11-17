@@ -4,8 +4,9 @@
 #include <json-c/json.h>
 
 #include "cli_config.h"
+#include "config.h"
 
-static void config_free_sources(struct config_s* config)
+INLINE static void config_free_sources(struct config_s* config)
 {
 	for (struct source_s* next = config->sources; next != NULL;) {
 		struct source_s* tmp = next->next;
@@ -15,7 +16,7 @@ static void config_free_sources(struct config_s* config)
 	config->sources = NULL;
 }
 
-static const char* config_parse_sources(
+INLINE static const char* config_parse_sources(
   struct config_s* config, json_object* obj)
 {
 	const char* err = NULL;
@@ -46,7 +47,7 @@ error:
 	return err;
 }
 
-static const char* config_parse(struct config_s* config, json_object* obj)
+INLINE static const char* config_parse(struct config_s* config, json_object* obj)
 {
 	json_object* url = NULL;
 	json_object* auth = NULL;
@@ -95,7 +96,8 @@ static const char* config_parse(struct config_s* config, json_object* obj)
 	}
 
 	if (json_object_object_get_ex(obj, "auth", &auth)) {
-		if (!json_object_is_type(auth, json_type_string)) {
+		if (!json_object_is_type(auth, json_type_string) &&
+		  !json_object_is_type(auth, json_type_null)) {
 			return "config_parse: unexpected type for 'auth' key in "
 				   "config "
 				   "file";
