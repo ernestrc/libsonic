@@ -99,8 +99,6 @@ static void on_read(h2o_socket_t* sock, const char* err)
 	size_left -= bytes;
 
 	while (size_left > LENGTH_PREFIX) {
-		SONIC_LOG("scanning %d bytes\n", size_left);
-
 		msg_size = (data[0] & 255) << 24 | (data[1] & 255) << 16 |
 		  (data[2] & 255) << 8 | (data[3] & 255);
 
@@ -116,8 +114,6 @@ static void on_read(h2o_socket_t* sock, const char* err)
 
 		if (sonic_message_decode(&msg, data, msg_size) != 0)
 			HANDLE_ERR(ctx, strerror(errno), "failed to decode message");
-
-		SONIC_LOG("decoded message of type '%c'\n", (char)msg.type);
 
 		switch (msg.type) {
 		case SONIC_TYPE_STARTED:

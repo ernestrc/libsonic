@@ -40,5 +40,4 @@
 	}
 
 int snprintj(char* dst, int dst_len, const json_object* j);
-
 #endif

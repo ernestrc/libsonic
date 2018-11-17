@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -23,17 +22,6 @@
 
 #define BUF_INIT_CAP 1024 * 64
 
-#define debug_printf_chunk(...)                                                \
-	if (args.verbose) {                                                        \
-		printf(__VA_ARGS__);                                                   \
-	}
-
-#define debug_printf(...)                                                      \
-	if (args.verbose) {                                                        \
-		printf("%lld: ", current_timestamp());                                 \
-		printf(__VA_ARGS__);                                                   \
-	}
-
 #define do_exit(status)                                                        \
 	all_free();                                                                \
 	exit(status);
@@ -49,10 +37,8 @@ struct args_s {
 	const char* file;
 	const char* source;
 	const char* config;
-	long io_timeout;
 	struct definevar_s* define;
 	bool rows_only;
-	bool verbose;
 	bool silent;
 };
 
@@ -100,13 +86,11 @@ void print_usage(const char* argv0)
 	  "  -c, --config=<config> 	Use configuration file [default: %2$s]\n"
 	  "  -d, --define=<foo=var>	Replace variable `${foo}` with value `var`\n"
 	  "  -r, --rows-only		Skip printing column names\n"
-	  "  -t, --io-timeout		I/O timeout [default: %3$ld]\n"
 	  "  -S, --silent			Disable progress bar\n"
-	  "  -V, --verbose			Enable debug level logging\n"
 	  "  -h, --help			Print this message\n"
 	  "  -v, --version			Print version\n"
 	  "\n",
-	  argv0, args.config, args.io_timeout);
+	  argv0, args.config);
 }
 
 void args_define_free(struct definevar_s* define)
@@ -151,11 +135,21 @@ void all_free()
 	args_free();
 }
 
-long long current_timestamp()
+const char* sonic_message_status_string(enum sonic_status status)
 {
-	struct timeval te;
-	gettimeofday(&te, NULL);
-	return te.tv_sec * 1000LL + te.tv_usec / 1000;
+	switch (status) {
+	case SONIC_STATUS_QUEUED:
+		return "queued";
+	case SONIC_STATUS_STARTED:
+		return "started";
+	case SONIC_STATUS_RUNNING:
+		return "running";
+	case SONIC_STATUS_WAITING:
+		return "waiting";
+	case SONIC_STATUS_FINISHED:
+		return "finished";
+	}
+	abort();
 }
 
 char* query_literal_replace_substitute(
@@ -199,7 +193,7 @@ pcre2_code* query_literal_replace_compile(char* pattern)
 		return NULL;
 	}
 
-	debug_printf("compiled pattern '%s' into pcre2 code", pattern);
+	SONIC_LOG("compiled pattern '%s' into pcre2 code", pattern);
 
 	return code;
 }
@@ -302,7 +296,7 @@ int query_file_read(buf_t* buf, int fd)
 	}
 	*buf->next_write = '\x00';
 
-	debug_printf("read query from file: %s", buf->buf);
+	SONIC_LOG("read query from file: %s", buf->buf);
 
 	return 0;
 }
@@ -340,11 +334,6 @@ void assert_args_coherent(const char* argv0)
 
 	if (!args.source) {
 		err = "<source> is missing";
-		goto error;
-	}
-
-	if (args.verbose && args.silent) {
-		err = "either --verbose or --silent can be defined";
 		goto error;
 	}
 
@@ -418,26 +407,21 @@ void args_init(int argc, char* argv[])
 	args.config = get_default_config();
 	args.define = NULL; // head of linked list
 	args.rows_only = false;
-	args.verbose = false;
 	args.silent = false;
-	args.io_timeout = 2000;
 
 	static struct option long_options[] = {
 	  {"execute", required_argument, 0, 'e'},
 	  {"file", required_argument, 0, 'f'},
 	  {"config", required_argument, 0, 'c'},
-	  {"io-timeout", required_argument, 0, 't'},
 	  {"define", required_argument, 0, 'd'}, {"rows-only", no_argument, 0, 'r'},
-	  {"silent", no_argument, 0, 'S'}, {"verbose", no_argument, 0, 'V'},
-	  {"help", no_argument, 0, 'h'}, {"version", no_argument, 0, 'v'},
-	  {0, 0, 0, 0}};
+	  {"silent", no_argument, 0, 'S'}, {"help", no_argument, 0, 'h'},
+	  {"version", no_argument, 0, 'v'}, {0, 0, 0, 0}};
 
 	int option_index = 0;
 	int c = 0;
-	while ((c = getopt_long(argc, argv, "e:f:t:c:d:rSVhv", long_options,
+	while ((c = getopt_long(argc, argv, "e:f:c:d:rShv", long_options,
 			  &option_index)) != -1) {
 		switch (c) {
-			// TODO parse io-timeout
 		case 'v':
 			print_version();
 			do_exit(0);
@@ -446,9 +430,6 @@ void args_init(int argc, char* argv[])
 			print_header();
 			print_usage(argv[0]);
 			do_exit(0);
-			break;
-		case 'V':
-			args.verbose = true;
 			break;
 		case 'S':
 			args.silent = true;
@@ -482,21 +463,18 @@ void args_init(int argc, char* argv[])
 
 	assert_args_coherent(argv[0]);
 
-	debug_printf(
+	SONIC_LOG(
 	  "parsed_args: literal: %s, file: %s, source: %s, config: %s, define:",
 	  args.literal, args.file, args.source, args.config);
 	for (struct definevar_s* next = args.define; next != NULL;
 		 next = next->next) {
-		debug_printf_chunk(" '%s'->'%s'", next->key, next->val);
+		SONIC_LOG(" '%s'->'%s'", next->key, next->val);
 	}
-	debug_printf_chunk(", rows_only: %d, verbose: %d, silent: %d\n",
-	  args.rows_only, args.verbose, args.silent);
+	SONIC_LOG(", rows_only: %d, silent: %d\n", args.rows_only, args.silent);
 }
 
 void close_all(int status_code)
 {
-	SONIC_LOG("closing all libuv handles, handles: %d\n", loop->active_handles);
-
 	uv_signal_stop(&sigint);
 	client_free();
 	pret = status_code;
@@ -510,28 +488,38 @@ void shutdown_sig_h(uv_signal_t* handle, int signum)
 	close_all(exit_code);
 }
 
-void on_started(void* userdata)
-{
-	debug_printf("	void on_started(void* userdata)");
-}
+void on_started(void* userdata) { SONIC_LOG("stream starting"); }
 
 void on_progress(const struct sonic_message_progress* msg, void* userdata)
 {
-	debug_printf(
-	  "	void on_progress(const struct sonic_message_progress*, void* "
-	  "userdata)");
+	static double sofar;
+
+	sofar += msg->progress;
+
+	fprintf(stderr, "\r%s: %g/%g %s", sonic_message_status_string(msg->status),
+	  sofar, msg->total, msg->units);
+
+	if (msg->status == SONIC_STATUS_FINISHED)
+		fprintf(stderr, "\n");
 }
 
 void on_metadata(const struct sonic_message_metadata* msg, void* userdata)
 {
-	debug_printf(
-	  "	void on_metadata(const struct sonic_message_metadata*, void* "
-	  "userdata)");
+	do {
+		fprintf(stdout, "%s", msg->name);
+	} while ((msg = msg->next) != NULL && fprintf(stderr, ","));
+
+	fprintf(stdout, "\n");
 }
+
 void on_data(const struct sonic_message_output* msg, void* userdata)
 {
-	debug_printf(
-	  "	void on_data(const struct sonic_message_output*, void* userdata)");
+	do {
+		fprintf(
+		  stdout, "%s", json_object_to_json_string((json_object*)msg->value));
+	} while ((msg = msg->next) != NULL && fprintf(stderr, ","));
+
+	fprintf(stdout, "\n");
 }
 
 void on_error(const char* err, void* userdata)
@@ -542,8 +530,12 @@ void on_error(const char* err, void* userdata)
 
 void on_complete(void* userdata)
 {
-	debug_printf("	void on_complete(void* userdata)");
+	SONIC_LOG("stream completed successfully");
+
 	close_all(0);
+
+	fflush(stdout);
+	fflush(stderr);
 }
 
 int loop_create()
@@ -560,7 +552,7 @@ int loop_create()
 		goto error;
 	}
 
-	debug_printf("initialized event loop %p", loop);
+	SONIC_LOG("initialized event loop %p", loop);
 	return 0;
 
 error:
@@ -602,7 +594,7 @@ struct sonic_message* query_create(
 	struct source_s* source_config;
 	for (source_config = cli_config->sources; source_config != NULL;
 		 source_config = source_config->next) {
-		if (source_config->key == source)
+		if (strcmp(source_config->key, source) == 0)
 			break;
 	}
 
@@ -635,7 +627,6 @@ struct sonic_client* client_create(uv_loop_t* loop, struct config_s* cli_config)
 	client_config.io_timeout = cli_config->io_timeout;
 	client_config.pool_timeout = client_config.io_timeout * 2;
 	client_config.pool_capacity = 1;
-	// TODO client_config.websocket_timeout = cli_config->websocket_timeout;
 
 	if ((c = sonic_client_create(loop, &client_config)) == NULL) {
 		perror("sonic_client_create");
@@ -715,15 +706,15 @@ int main(int argc, char* argv[])
 	if ((pret = sonic_client_send(client, query, ctx)) != 0)
 		goto exit;
 
-	debug_printf("running query:\n----------\n%s\n----------\n", query_str);
+	SONIC_LOG("running query '%s'\n", query_str);
 
 	while (uv_run(loop, UV_RUN_DEFAULT))
 		;
 
-	debug_printf("uv loop exit; uv_loop_alive: %d\n", uv_loop_alive(loop));
+	SONIC_LOG("uv loop exit; uv_loop_alive: %d\n", uv_loop_alive(loop));
 
 exit:
 	all_free();
-	debug_printf("freed all resources, exiting with status: %d\n", pret);
+	SONIC_LOG("exiting with status: %d\n", pret);
 	return pret;
 }
