@@ -59,7 +59,7 @@ void print_version() { printf("sonic %s\n", SONIC_VERSION); }
 void print_header()
 {
 	printf("\n"
-		   ".\n"
+		   "\n"
 		   "                           d8b\n"
 		   "                           Y8P\n"
 		   "\n"
@@ -86,7 +86,7 @@ void print_usage(const char* argv0)
 	  "  -c, --config=<config> 	Use configuration file [default: %2$s]\n"
 	  "  -d, --define=<foo=var>	Replace variable `${foo}` with value `var`\n"
 	  "  -r, --rows-only		Skip printing column names\n"
-	  "  -S, --silent			Disable progress bar\n"
+	  "  -S, --silent			Disable printing query progress\n"
 	  "  -h, --help			Print this message\n"
 	  "  -v, --version			Print version\n"
 	  "\n",
@@ -419,8 +419,8 @@ void args_init(int argc, char* argv[])
 
 	int option_index = 0;
 	int c = 0;
-	while ((c = getopt_long(argc, argv, "e:f:c:d:rShv", long_options,
-			  &option_index)) != -1) {
+	while ((c = getopt_long(
+			  argc, argv, "e:f:c:d:rShv", long_options, &option_index)) != -1) {
 		switch (c) {
 		case 'v':
 			print_version();
@@ -496,11 +496,14 @@ void on_progress(const struct sonic_message_progress* msg, void* userdata)
 
 	sofar += msg->progress;
 
-	fprintf(stderr, "\r%s: %g/%g %s", sonic_message_status_string(msg->status),
-	  sofar, msg->total, msg->units);
+	if (!args.silent) {
+		fprintf(stderr, "\r%s: %g/%g %s",
+		  sonic_message_status_string(msg->status), sofar, msg->total,
+		  msg->units);
 
-	if (msg->status == SONIC_STATUS_FINISHED)
-		fprintf(stderr, "\n");
+		if (msg->status == SONIC_STATUS_FINISHED)
+			fprintf(stderr, "\n");
+	}
 }
 
 void on_metadata(const struct sonic_message_metadata* msg, void* userdata)
