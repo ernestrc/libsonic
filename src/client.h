@@ -20,7 +20,6 @@ struct sonic_client {
 	struct sonic_tcp_config tcp_cfg;
 	SSL_CTX* ssl_ctx;
 	h2o_socketpool_t sockpool;
-	h2o_timeout_t io_timeout;
 	uv_loop_t* loop;
 	uv_timer_t* close_dispatcher;
 };
@@ -30,6 +29,7 @@ struct sonic_config {
 	const char* url;
 	int pool_capacity;
 	int pool_timeout;
+	/* TODO: implement on tcp client */
 	int io_timeout;
 };
 

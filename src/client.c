@@ -105,7 +105,6 @@ INLINE static int client_sockpool_init(struct sonic_client* c, uv_loop_t* loop,
 	h2o_socketpool_init_by_address(&c->sockpool, (struct sockaddr*)&addr,
 	  sizeof(struct sockaddr), is_tls, cfg->pool_capacity);
 	h2o_socketpool_set_timeout(&c->sockpool, c->loop, cfg->pool_timeout);
-	h2o_timeout_init(c->loop, &c->io_timeout, cfg->io_timeout);
 
 	return 0;
 }
@@ -165,7 +164,7 @@ int sonic_client_init(
 		if (SSL_load_error_strings() || SSL_library_init() ||
 		  OpenSSL_add_all_algorithms() ||
 		  // TODO tls version should be in config ?
-		  ((c->ssl_ctx = SSL_CTX_new(TLSv1_client_method())) == NULL)) {
+		  ((c->ssl_ctx = SSL_CTX_new(TLS_client_method())) == NULL)) {
 			char buf[512];
 			SONIC_LOG("SSL init: %s", ERR_error_string(ERR_get_error(), buf));
 			errno = EINVAL;
@@ -191,6 +190,7 @@ int sonic_client_init(
 		c->type = SONIC_WS_CLIENT;
 		c->ws_cfg.sockpool = &c->sockpool;
 		c->ws_cfg.loop = c->loop;
+		c->ws_cfg.io_timeout = cfg->io_timeout;
 		return sonic_ws_client_init(&c->client.ws, url, &c->ws_cfg);
 	}
 
@@ -206,8 +206,6 @@ error:
 	if (c->sockpool.capacity != 0) {
 		h2o_socketpool_dispose(&c->sockpool);
 	}
-	if (c->io_timeout.timeout != 0)
-		h2o_timeout_dispose(c->loop, &c->io_timeout);
 	errno = lerrno;
 	return 1;
 }
@@ -243,7 +241,6 @@ INLINE static void sonic_client_deinit(struct sonic_client* c)
 	}
 
 	h2o_socketpool_dispose(&c->sockpool);
-	h2o_timeout_dispose(c->loop, &c->io_timeout);
 }
 
 struct sonic_client* sonic_client_create(

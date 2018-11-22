@@ -8,6 +8,16 @@
 #include "message.h"
 #include "sonic.h"
 
+struct sonic_tcp_ctx {
+	struct sonic_message* cmd;
+	struct sonic_stream_ctx* sctx;
+	struct sonic_tcp_client* client;
+	h2o_iovec_t buf;
+	h2o_socketpool_connect_request_t* req;
+	h2o_socket_t* sock;
+	struct sonic_tcp_ctx* next;
+};
+
 struct sonic_tcp_client {
 	uv_loop_t* loop;
 	SSL_CTX* ssl_ctx;

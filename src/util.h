@@ -39,5 +39,26 @@
 		return 1;                                                              \
 	}
 
+#define UNLINK_NODE(type, node)                                                \
+	{                                                                          \
+		type *__next, *__prev;                                                 \
+		for (__prev = NULL, __next = (node)->client->reqs; __next != NULL;     \
+			 __prev = __next, __next = __next->next) {                         \
+			if (__next == (node)) {                                            \
+				if (__prev == NULL) {                                          \
+					(node)->client->reqs = __next->next;                       \
+				} else {                                                       \
+					__prev->next = __next->next;                               \
+				}                                                              \
+				break;                                                         \
+			}                                                                  \
+		}                                                                      \
+	}
+
+#define CALL_HANDLER(handler, ...)                                             \
+	if ((handler) != NULL) {                                                   \
+		(handler)(__VA_ARGS__);                                                \
+	}
+
 int snprintj(char* dst, int dst_len, const json_object* j);
 #endif

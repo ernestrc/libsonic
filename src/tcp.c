@@ -9,9 +9,11 @@
 
 #define LENGTH_PREFIX 4
 
-#define RELEASE_CTX(ctx)                                                       \
-	if ((ctx)->buf.base)                                                       \
+#define RELEASE_TCP_CTX(ctx)                                                   \
+	if ((ctx)->buf.base) {                                                     \
 		free((ctx)->buf.base);                                                 \
+		(ctx)->buf.base = NULL;                                                \
+	}                                                                          \
 	if ((ctx)->req != NULL) {                                                  \
 		SONIC_LOG("canceling connect request %p", (ctx)->req);                 \
 		h2o_socketpool_cancel_connect((ctx)->req);                             \
@@ -22,55 +24,22 @@
 		h2o_socket_close((ctx)->sock);                                         \
 		(ctx)->sock = NULL;                                                    \
 	}                                                                          \
-	unlink_ctx(ctx);                                                           \
+	UNLINK_NODE(struct sonic_tcp_ctx, ctx);                                    \
 	free(ctx);
 
-#define CALL_HANDLER(handler, ...)                                             \
-	if ((handler) != NULL) {                                                   \
-		(handler)(__VA_ARGS__);                                                \
-	}
-
 #define HANDLE_ERR(ctx, err, msg)                                              \
-	if (err != NULL) {                                                         \
-		CALL_HANDLER((ctx)->sctx->on_error, err, (ctx)->sctx->userdata);       \
-		SONIC_LOG("%s: %s", err, msg "\n");                                    \
-		RELEASE_CTX(ctx);                                                      \
+	if ((err) != NULL) {                                                       \
+		CALL_HANDLER((ctx)->sctx->on_error, (err), (ctx)->sctx->userdata);     \
+		SONIC_LOG("%s: %s", (err), msg "\n");                                  \
+		RELEASE_TCP_CTX(ctx);                                                  \
 		return;                                                                \
 	}
-
-struct sonic_tcp_ctx {
-	struct sonic_message* cmd;
-	struct sonic_stream_ctx* sctx;
-	struct sonic_tcp_client* client;
-	h2o_iovec_t buf;
-	h2o_socketpool_connect_request_t* req;
-	h2o_socket_t* sock;
-	struct sonic_tcp_ctx* next;
-};
 
 static const struct sonic_message SONIC_MESSAGE_ACK =
   (struct sonic_message){SONIC_TYPE_ACK};
 
 static void send_msg(h2o_socket_t* sock, const struct sonic_message* msg,
   struct sonic_tcp_ctx* ctx, h2o_socket_cb cb);
-
-INLINE static void unlink_ctx(struct sonic_tcp_ctx* ctx)
-{
-	struct sonic_tcp_ctx *next, *prev;
-	for (prev = NULL, next = ctx->client->reqs; next != NULL;
-		 prev = next, next = next->next) {
-		if (next == ctx) {
-			if (prev == NULL) {
-				ctx->client->reqs = next->next;
-			} else {
-				prev->next = next->next;
-			}
-			return;
-		}
-	}
-
-	abort();
-}
 
 static void on_write_ack(h2o_socket_t* sock, const char* err)
 {
@@ -79,7 +48,7 @@ static void on_write_ack(h2o_socket_t* sock, const char* err)
 
 	SONIC_LOG("written ack, socket: %p\n", sock);
 
-	RELEASE_CTX(ctx);
+	RELEASE_TCP_CTX(ctx);
 }
 
 static void on_read(h2o_socket_t* sock, const char* err)
@@ -265,7 +234,7 @@ void sonic_tcp_client_deinit(struct sonic_tcp_client* c)
 	struct sonic_tcp_ctx *tmp, *next = c->reqs;
 	while (next != NULL) {
 		tmp = next->next;
-		RELEASE_CTX(next);
+		RELEASE_TCP_CTX(next);
 		next = tmp;
 	}
 	c->reqs = NULL;
