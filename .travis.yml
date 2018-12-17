@@ -4,6 +4,11 @@ language: c
 services:
   - docker
 
+addons:
+  homebrew:
+    update: true
+    brewfile: utils/Brewfile
+
 matrix:
   include:
     # develop build
@@ -38,14 +43,14 @@ matrix:
       osx_image: xcode8
       env:
         - MATRIX_EVAL="export LIBTOOLIZE=glibtoolize && export LIBTOOL=glibtool"
-        - MATRIX_SCRIPT="env && brew update && brew bundle --file=utils/Brewfile && ./configure --enable-build-all && make"
+        - MATRIX_SCRIPT="env && ./configure --enable-build-all && make"
 
     # check that we can build on OSX 10.12
     - os: osx
       osx_image: xcode9
       env:
         - MATRIX_EVAL="export LIBTOOLIZE=glibtoolize && export LIBTOOL=glibtool"
-        - MATRIX_SCRIPT="env && brew update && brew bundle --file=utils/Brewfile && ./configure --enable-build-all && make"
+        - MATRIX_SCRIPT="env && ./configure --enable-build-all && make"
 
 before_install:
     - eval "${MATRIX_EVAL}"
