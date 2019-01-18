@@ -1,0 +1,13 @@
+FROM centos:7
+
+RUN yum install -y epel-release && yum update -y
+RUN yum install -y git make gcc libtool zlib-devel openssl-devel pcre-devel patch vim-common
+
+WORKDIR /opt/sonic
+VOLUME /opt/sonic/bin
+
+COPY . /opt/sonic
+
+RUN ./configure CFLAGS='-DOPENSSL_NO_SRP -I/opt/sonic/deps/include -I/opt/sonic/deps/include/luajit-2.0 -O3' --enable-build-luajit --enable-build-libuv
+
+CMD make

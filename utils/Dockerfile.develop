@@ -1,0 +1,24 @@
+FROM debian:stretch
+
+RUN \
+ apt-get update -y && \
+ apt-get install -y wget gnupg && \
+ echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-6.0 main" | tee /etc/apt/sources.list.d/clang6.list && \
+ echo "deb-src http://apt.llvm.org/stretch/ llvm-toolchain-stretch-6.0 main" | tee /etc/apt/sources.list.d/clang6-src.list && \
+ wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
+ apt-get update -y && \
+ apt-get install -y git make gcc libtool patch vim-common pkg-config autoconf openssl libssl-dev zlib1g-dev \
+  clang-6.0 clang-tools-6.0 clang-6.0-doc libclang-common-6.0-dev \
+  libclang-6.0-dev libclang1-6.0 libllvm6.0 lldb-6.0 \
+  llvm-6.0 llvm-6.0-dev llvm-6.0-doc llvm-6.0-examples llvm-6.0-runtime clang-format-6.0 \
+  liblldb-6.0-dev lld-6.0 libfuzzer-6.0-dev gdb valgrind procps
+
+RUN ln -s /usr/bin/llvm-symbolizer-6.0 /usr/bin/llvm-symbolizer
+
+WORKDIR /opt/sonic
+VOLUME /opt/sonic/bin
+
+COPY . /opt/sonic
+
+RUN ./configure --enable-build-luajit --enable-build-libuv --enable-develop CFLAGS='-I/opt/sonic/deps/include -I/opt/sonic/deps/include/luajit-2.0 -DOPENSSL_NO_STDIO -Wall -fsanitize-coverage=trace-cmp,trace-pc-guard -fprofile-instr-generate -fcoverage-mapping' CC=clang-6.0 
+CMD make && make test

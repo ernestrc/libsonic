@@ -1,0 +1,12 @@
+FROM alpine:3.7
+
+RUN apk update && apk add alpine-sdk coreutils libtool automake m4 autoconf linux-headers vim sed
+
+WORKDIR /opt/sonic
+VOLUME /opt/sonic/bin
+
+COPY . /opt/sonic
+
+RUN ./configure LDFLAGS='-static -L/opt/sonic/deps/lib' CFLAGS='-I/opt/sonic/deps/include -I/opt/sonic/deps/include/luajit-2.0 -O3' --enable-build-all
+
+CMD make

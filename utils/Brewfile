@@ -1,0 +1,5 @@
+brew 'pkg-config'
+brew 'autoconf'
+brew 'automake'
+brew 'libtool'
+brew 'truncate'
