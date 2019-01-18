@@ -10,10 +10,6 @@
 	path = deps/h2o
 	url = https://github.com/h2o/h2o.git
 	ignore = dirty
-[submodule "deps/wslay"]
-	path = deps/wslay
-	url = https://github.com/tatsuhiro-t/wslay.git
-	ignore = dirty
 [submodule "deps/openssl"]
 	path = deps/openssl
 	url = https://github.com/openssl/openssl.git

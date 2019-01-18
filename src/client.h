@@ -6,17 +6,9 @@
 
 #include "message.h"
 #include "tcp.h"
-#include "ws.h"
-
-enum sonic_client_type { SONIC_WS_CLIENT, SONIC_TCP_CLIENT };
 
 struct sonic_client {
-	enum sonic_client_type type;
-	union {
-		struct sonic_ws_client ws;
-		struct sonic_tcp_client tcp;
-	} client;
-	struct sonic_ws_config ws_cfg;
+	struct sonic_tcp_client tcp;
 	struct sonic_tcp_config tcp_cfg;
 	SSL_CTX* ssl_ctx;
 	h2o_socketpool_t sockpool;

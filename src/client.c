@@ -12,8 +12,6 @@
 
 const h2o_url_scheme_t SONIC_URL_SCHEME_TCP = {{H2O_STRLIT("tcp")}, 10000};
 const h2o_url_scheme_t SONIC_URL_SCHEME_TLS = {{H2O_STRLIT("tls")}, 10001};
-const h2o_url_scheme_t SONIC_URL_SCHEME_WS = {{H2O_STRLIT("ws")}, 9111};
-const h2o_url_scheme_t SONIC_URL_SCHEME_WSS = {{H2O_STRLIT("wss")}, 9112};
 
 INLINE static int sonic_parse_url(h2o_url_t* dest, const char* url)
 {
@@ -27,14 +25,6 @@ INLINE static int sonic_parse_url(h2o_url_t* dest, const char* url)
 		dest->scheme = &SONIC_URL_SCHEME_TLS;
 		url += 4;
 		url_len -= 4;
-	} else if (strncmp(url, "wss://", 6) == 0) {
-		dest->scheme = &SONIC_URL_SCHEME_WSS;
-		url += 4;
-		url_len -= 4;
-	} else if (strncmp(url, "ws://", 5) == 0) {
-		dest->scheme = &SONIC_URL_SCHEME_WS;
-		url += 3;
-		url_len -= 3;
 	} else if (strncmp(url, "tcp://", 6) == 0) {
 		dest->scheme = &SONIC_URL_SCHEME_TCP;
 		url += 4;
@@ -155,10 +145,7 @@ int sonic_client_init(
 		goto error;
 	}
 
-	int is_tls = url.scheme == &SONIC_URL_SCHEME_WSS ||
-	  url.scheme == &SONIC_URL_SCHEME_TLS;
-	int is_ws =
-	  url.scheme == &SONIC_URL_SCHEME_WSS || url.scheme == &SONIC_URL_SCHEME_WS;
+	int is_tls = url.scheme == &SONIC_URL_SCHEME_TLS;
 
 	if (is_tls && cfg->ssl_ctx == NULL) {
 		if (SSL_load_error_strings() || SSL_library_init() ||
@@ -176,28 +163,17 @@ int sonic_client_init(
 		// SSL_CTX_set_verify(
 		//   ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
 		c->tcp_cfg.ssl_ctx = c->ssl_ctx;
-		c->ws_cfg.ssl_ctx = c->ssl_ctx;
 	} else if (is_tls) {
 		/* managed externally */
 		c->tcp_cfg.ssl_ctx = cfg->ssl_ctx;
-		c->ws_cfg.ssl_ctx = cfg->ssl_ctx;
 	}
 
 	if (client_sockpool_init(c, loop, is_tls, &url, cfg) != 0)
 		goto error;
 
-	if (is_ws) {
-		c->type = SONIC_WS_CLIENT;
-		c->ws_cfg.sockpool = &c->sockpool;
-		c->ws_cfg.loop = c->loop;
-		c->ws_cfg.io_timeout = cfg->io_timeout;
-		return sonic_ws_client_init(&c->client.ws, url, &c->ws_cfg);
-	}
-
-	c->type = SONIC_TCP_CLIENT;
 	c->tcp_cfg.sockpool = &c->sockpool;
 	c->tcp_cfg.loop = c->loop;
-	return sonic_tcp_client_init(&c->client.tcp, &c->tcp_cfg);
+	return sonic_tcp_client_init(&c->tcp, &c->tcp_cfg);
 
 error:
 	lerrno = errno;
@@ -213,28 +189,12 @@ error:
 int sonic_client_send(struct sonic_client* c, struct sonic_message* cmd,
   struct sonic_stream_ctx* ctx)
 {
-	switch (c->type) {
-	case SONIC_TCP_CLIENT:
-		return sonic_tcp_client_send(&c->client.tcp, cmd, ctx);
-	case SONIC_WS_CLIENT:
-		return sonic_ws_client_send(&c->client.ws, cmd, ctx);
-	default:
-		abort();
-	}
+	return sonic_tcp_client_send(&c->tcp, cmd, ctx);
 }
 
 INLINE static void sonic_client_deinit(struct sonic_client* c)
 {
-	switch (c->type) {
-	case SONIC_TCP_CLIENT:
-		sonic_tcp_client_deinit(&c->client.tcp);
-		break;
-	case SONIC_WS_CLIENT:
-		sonic_ws_client_deinit(&c->client.ws);
-		break;
-	default:
-		abort();
-	}
+	sonic_tcp_client_deinit(&c->tcp);
 
 	if (c->ssl_ctx) {
 		SSL_CTX_free(c->ssl_ctx);
