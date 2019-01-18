@@ -14,7 +14,7 @@ struct sonic_ws_ctx {
 	h2o_http1client_ctx_t httpctx;
 	h2o_iovec_t httpreq;
 	struct sonic_message* cmd;
-	struct sonic_stream_ctx* sctx;
+	struct sonic_client_ctx* sctx;
 	struct sonic_ws_client* client;
 	h2o_iovec_t buf;
 	h2o_http1client_t* req;
@@ -45,7 +45,7 @@ int sonic_ws_client_init(
   struct sonic_ws_client* c, h2o_url_t url, struct sonic_ws_config* cfg);
 
 int sonic_ws_client_send(struct sonic_ws_client* c, struct sonic_message* cmd,
-  struct sonic_stream_ctx* ctx);
+  struct sonic_client_ctx* ctx);
 
 void sonic_ws_client_deinit(struct sonic_ws_client* c);
 

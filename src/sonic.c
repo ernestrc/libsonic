@@ -48,7 +48,7 @@ struct args_s args;
 struct config_s* config;
 char* query_str;
 struct sonic_message* query;
-struct sonic_stream_ctx* ctx;
+struct sonic_client_ctx* ctx;
 uv_signal_t sigint;
 buf_t* query_buf;
 uv_loop_t* loop;
@@ -566,11 +566,11 @@ error:
 	return 1;
 }
 
-struct sonic_stream_ctx* ctx_create()
+struct sonic_client_ctx* ctx_create()
 {
-	struct sonic_stream_ctx* res;
+	struct sonic_client_ctx* res;
 
-	if ((res = calloc(1, sizeof(struct sonic_stream_ctx))) == NULL)
+	if ((res = calloc(1, sizeof(struct sonic_client_ctx))) == NULL)
 		return NULL;
 
 	res->on_started = on_started;

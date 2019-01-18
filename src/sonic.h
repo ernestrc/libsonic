@@ -3,7 +3,7 @@
 
 #include "message.h"
 
-struct sonic_stream_ctx {
+struct sonic_client_ctx {
 	void (*on_started)(void*);
 	void (*on_progress)(const struct sonic_message_progress*, void*);
 	void (*on_metadata)(const struct sonic_message_metadata*, void*);

@@ -210,7 +210,7 @@
 //}
 //
 //int sonic_ws_client_send(struct sonic_ws_client* c, struct sonic_message* cmd,
-//  struct sonic_stream_ctx* sctx)
+//  struct sonic_client_ctx* sctx)
 //{
 //	struct sonic_ws_ctx* ctx = NULL;
 //
@@ -268,7 +268,7 @@ int sonic_ws_client_init(
 }
 
 int sonic_ws_client_send(struct sonic_ws_client* c, struct sonic_message* cmd,
-  struct sonic_stream_ctx* ctx)
+  struct sonic_client_ctx* ctx)
 {
 	abort();
 }

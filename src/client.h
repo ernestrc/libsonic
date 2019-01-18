@@ -17,7 +17,7 @@ struct sonic_client {
 		struct sonic_tcp_client tcp;
 	} client;
 	struct sonic_ws_config ws_cfg;
-	struct sonic_tcp_config tcp_cfg;
+	struct sonic_tcp_client_config tcp_cfg;
 	SSL_CTX* ssl_ctx;
 	h2o_socketpool_t sockpool;
 	uv_loop_t* loop;
@@ -52,7 +52,7 @@ struct sonic_client* sonic_client_create(
   uv_loop_t* loop, struct sonic_config* cfg);
 
 int sonic_client_send(struct sonic_client* c, struct sonic_message* cmd,
-  struct sonic_stream_ctx* ctx);
+  struct sonic_client_ctx* ctx);
 
 void sonic_client_free(struct sonic_client* c);
 

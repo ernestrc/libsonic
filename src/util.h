@@ -60,5 +60,13 @@
 		(handler)(__VA_ARGS__);                                                \
 	}
 
+#define err_snprintf(err, ...)                                                 \
+	{                                                                          \
+		int __need = snprintf(NULL, 0, __VA_ARGS__);                           \
+		(err) = malloc(__need + 1);                                            \
+		if ((err) != NULL)                                                     \
+			snprintf((err), __need + 1, __VA_ARGS__);                          \
+	}
+
 int snprintj(char* dst, int dst_len, const json_object* j);
 #endif

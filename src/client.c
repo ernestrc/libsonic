@@ -211,7 +211,7 @@ error:
 }
 
 int sonic_client_send(struct sonic_client* c, struct sonic_message* cmd,
-  struct sonic_stream_ctx* ctx)
+  struct sonic_client_ctx* ctx)
 {
 	switch (c->type) {
 	case SONIC_TCP_CLIENT:
