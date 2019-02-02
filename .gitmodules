@@ -22,3 +22,7 @@
 	path = deps/pcre2
 	url = https://github.com/luvit/pcre2.git
 	ignore = dirty
+[submodule "deps/wslay"]
+	path = deps/wslay
+	url = https://github.com/tatsuhiro-t/wslay.git
+	ignore = dirty
