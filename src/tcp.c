@@ -14,16 +14,6 @@
 		free((ctx)->buf.base);                                                 \
 		(ctx)->buf.base = NULL;                                                \
 	}                                                                          \
-	if ((ctx)->req != NULL) {                                                  \
-		SONIC_LOG("canceling connect request %p", (ctx)->req);                 \
-		h2o_socketpool_cancel_connect((ctx)->req);                             \
-		(ctx)->req = NULL;                                                     \
-	}                                                                          \
-	if ((ctx)->sock != NULL) {                                                 \
-		SONIC_LOG("closing socket %p\n", (ctx)->sock);                         \
-		h2o_socket_close((ctx)->sock);                                         \
-		(ctx)->sock = NULL;                                                    \
-	}                                                                          \
 	UNLINK_NODE(struct sonic_tcp_ctx, ctx);                                    \
 	free(ctx);
 
@@ -31,6 +21,11 @@
 	if ((err) != NULL) {                                                       \
 		CALL_HANDLER((ctx)->sctx->on_error, (err), (ctx)->sctx->userdata);     \
 		SONIC_LOG("%s: %s", (err), msg "\n");                                  \
+		if ((ctx)->sock != NULL) {                                             \
+			SONIC_LOG("closing socket %p\n", (ctx)->sock);                     \
+			h2o_socket_close((ctx)->sock);                                     \
+			(ctx)->sock = NULL;                                                \
+		}                                                                      \
 		RELEASE_TCP_CTX(ctx);                                                  \
 		return;                                                                \
 	}
@@ -48,6 +43,7 @@ static void on_write_ack(h2o_socket_t* sock, const char* err)
 
 	SONIC_LOG("written ack, socket: %p\n", sock);
 
+	h2o_socket_close((ctx)->sock);
 	RELEASE_TCP_CTX(ctx);
 }
 
@@ -234,6 +230,12 @@ void sonic_tcp_client_deinit(struct sonic_tcp_client* c)
 	struct sonic_tcp_ctx *tmp, *next = c->reqs;
 	while (next != NULL) {
 		tmp = next->next;
+		if (next->req != NULL) {
+			h2o_socketpool_cancel_connect(next->req);
+		}
+		if (next->sock != NULL) {
+			h2o_socket_close(next->sock);
+		}
 		RELEASE_TCP_CTX(next);
 		next = tmp;
 	}

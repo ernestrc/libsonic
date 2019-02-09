@@ -119,6 +119,8 @@ void all_free()
 {
 	if (loop) {
 		uv_loop_close(loop);
+		// FIXME loop->watchers is leaked
+		// because there are handles in handle_queue
 		free(loop);
 	}
 	if (query) {
@@ -475,6 +477,7 @@ void args_init(int argc, char* argv[])
 
 void close_all(int status_code)
 {
+	SONIC_LOG("closing all handles: any_alive: %d\n", uv_loop_alive(loop));
 	uv_signal_stop(&sigint);
 	client_free();
 	pret = status_code;

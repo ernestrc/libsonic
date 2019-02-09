@@ -225,6 +225,8 @@ static void deferred_client_free(uv_timer_t* timer)
 {
 	struct sonic_client* c = (struct sonic_client*)timer->data;
 
+	SONIC_LOG("freeing sonic client, timer: %p\n", timer);
+
 	sonic_client_deinit(c);
 	free(c);
 
